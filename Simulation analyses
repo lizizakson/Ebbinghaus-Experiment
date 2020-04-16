@@ -1,0 +1,126 @@
+Simulation on many subjects - new design (R code)
+```{r}
+##Simulation according to value:
+#Current values (8 subjects)
+cond_f <- NULL
+cond_f <- low_high
+hist(cond_f$new_old_diff)
+describe(cond_f$new_old_diff)
+sd(cond_f$new_old_diff)
+
+cond_f <- subset(low_high, TrialType == "Low")
+describe(cond_f$context_value)
+
+cond_f <- subset(low_high, Rank > 16)
+cond_f <- subset(cond_f, Rank < 45 ) 
+describe(cond_f$OldValue)
+
+##Simulation
+iterantionN = 1000 #number of iterations
+#minN = 20
+#maxN = 100
+stoppingRole = 5
+
+ #create a new data frame with one coloumn and number of rows according to the number of iterations
+  powerVec = setNames(data.frame(matrix(ncol = 1, nrow = iterantionN),row.names=1:iterantionN),'power')
+  
+stopCounter = 0
+#for (sampleN in 60:100){
+for (iteration in 1:iterantionN){
+  #iteration <- 1
+#30 target products (16:45), and 20 context products+10 medium produvts as context:
+num_subjects <- 80
+data_set <- NULL
+
+for (ii in 1:num_subjects){
+
+len_trials <- 120
+len_features <- 2
+
+#Generate a sample of 20 ranks (25:45) from a uniform distribution
+v1 <- NULL
+v1 <- sample(5:25, len_trials, replace=TRUE)
+dim(v1) <- c(len_trials, 1)
+
+#Generate a sample of 10 high contexts (51:60)
+len_h <- 40
+h1 <- sample(27:30, len_h, replace=TRUE)
+dim(h1) <- c(len_h,1)
+h1_name <- rep(2, len_h)
+dim(h1_name) <- c(len_h,1)
+
+#Generate a sample of 10 low contexts (1:10)
+l1 <- sample(0:5, len_h , replace=TRUE)
+dim(l1) <- c(len_h ,1)
+l1_name <- rep(1, len_h)
+dim(l1_name) <- c(len_h,1)
+
+#Generate a sample of 10 medium contexts (16:45)
+m1 <- sample(5:25, 10, replace=TRUE)
+dim(m1) <- c(10,1)
+m1 <- rep(m1, 4)
+m1_name <- rep(0, len_h)
+dim(m1_name) <- c(len_h,1)
+
+#Generate random SlideValues (H0)
+a1 <- v1 + rnorm(len_trials, 0, 5.78)
+a1[a1>30] <- 30
+a1[a1<0] <- 0
+#a1 <- sample(0:30, len_trials, replace=TRUE)
+dim(a1) <- c(len_trials, 1)
+
+#Generate subject num
+Subject <- rep(ii, len_trials)
+dim(Subject) <- c(len_trials,1)
+
+##Create data set for one subject
+#data_set <- matrix( , nrow = len_trials, ncol = len_features)
+data_set_temp1 <- c(m1,l1,h1)
+data_set_temp2 <- c(m1_name, l1_name, h1_name)
+data_set_perSub <- cbind(Subject, v1, data_set_temp2, data_set_temp1, a1)
+
+##Concatanate it to all the other subjects
+data_set <- rbind(data_set, data_set_perSub)
+
+data_set_perSub <- NULL
+
+}
+
+data_set <- as.data.frame(data_set)
+colnames(data_set) <- c("Subject", "OldValue","TrialType" ,"context_mean", "SlideValue")
+data_set$TrialType <- as.factor(data_set$TrialType)
+#data_set$OldValue <- as.numeric(data_set$OldValue)
+#data_set$SlideValue <- as.numeric(data_set$SlideValue)
+#data_set$context_mean <- as.numeric(data_set$context_mean)
+
+
+data_set$context_target_diff <- data_set$context_mean - data_set$OldValue
+
+#plot(data_set$OldValue, data_set$context_target_diff)
+
+data_set$new_old_diff <- data_set$SlideValue - data_set$OldValue
+
+#plot(data_set$context_mean, data_set$new_old_diff)
+#abline(h=0, col="blue")
+
+#plot(data_set$OldValue, data_set$SlideValue)
+
+##GLM
+
+mymodel = lmer(SlideValue ~ OldValue + TrialType + abs(context_target_diff) + (1 | Subject),
+                data = data_set,
+               REML=FALSE
+                )
+summary(mymodel)
+
+#p-value of context_target_diff
+#coef(summary(mymodel))[, 5][2]
+
+powerVec$power[iteration] = coef(summary(mymodel))[, 5][5]
+    print(coef(summary(mymodel))[, 5][5])
+    print(iteration)
+}
+
+hist(powerVec)
+
+```
