@@ -1,0 +1,1005 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+rm(list = ls())  
+#work computer
+#mywd="C:/Users/User/Dropbox/SharedEbbin/Task/Results/pilot_v6"
+#home computer
+mywd="C:/Users/Liz/Dropbox/LabDropbox/Liz/Ebbinghaus/Online Exp/allSubjects"
+setwd(mywd)
+
+#Install libraries
+#install and read package for reading ecxel files
+##install.packages("installr")
+##install.packages("readxl")
+##install.packages("dplyr")
+##install.packages("caTools")
+##install.packages("ggplot2")
+##install.packages("GGally")
+##install.packages("reshape2")
+##install.packages("lme4")
+##install.packages("compiler")
+#install.packages("parallel")
+#install.packages("boot")
+#install.packages("lattice")
+#install.packages("sjPlot")
+#install.packages("sjlabelled")
+#install.packages("sjmisc")
+#install.packages("ggplot2")
+#install.packages("languageR")
+#install.packages("plotrix")
+#install.packages("psych")
+#install.packages("hash")
+#install.packages("reticulate")
+#install.packages("lmerTest")
+#install.packages("nlme")
+#install.packages("jtools") 
+#install.packages("interactions")
+#install.packages("emmeans", dependencies=TRUE)
+#install.packages("latticeExtra")
+#install.packages("Hmisc", dependencies=TRUE) 
+
+#Load libraries
+library(installr)
+library("readxl")
+library(caTools)
+library(dplyr)
+require(ggplot2)
+require(GGally)
+require(reshape2)
+require(lme4)
+require(compiler)
+require(parallel)
+require(boot)
+require(lattice)
+#library(sjPlot)
+#library(sjlabelled)
+#library(sjmisc)
+#library(ggplot2)
+#library(languageR)
+library(psych)
+library(hash)
+library(reticulate)
+library(lmerTest)
+library(nlme)
+library(jtools)
+library(interactions)
+library(emmeans)
+library(Hmisc)
+
+#files <- list.files(path = mywd)
+
+
+#mydata <- read.csv("ValuePerception-8915-bdm.csv")
+
+
+```
+
+
+Concatenate several data frames
+```{r}
+setwd("C:/Users/Liz/Dropbox/LabDropbox/Liz/Ebbinghaus/Online Exp/allSubjects")
+ldf <- list() # creates a list
+listcsv <- dir(pattern = ".*csv") # creates the list of all the csv files in the directory
+for (k in 1:length(listcsv)){
+ ldf[[k]] <- read.csv(listcsv[k])
+}
+#str(ldf[[1]]) 
+
+mydata <- do.call("rbind", ldf)
+
+#mydata  <- data[data$Subject %in% c(113,114,115,116,117,118),]
+#mydata <- data[(data$Subject > 112),] #pilot V1
+#mydata <- data[(data$Subject > 200),] #pilot V3
+#mydata <- data[(data$Subject > 300),] #pilot V4
+#mydata <- data[(data$Subject > 400),] #pilot V5
+
+#exclude missed trials
+mydata <- mydata %>% filter(SlideValue != "NaN")
+
+#Problematic subjects (problem with BDM)
+#pp <- c(114,118,119,124) #pilot v1
+#pp <- c(127,132,137,149,156,157) #pilot v2
+#pp <- c(203,204) #pilot v3
+#pp <- c(203,204, 225, 228) #pilot 3 all
+#pp <- c(601,604,605)
+
+#Online exp
+#pp1 <- c(3,5, 6, 7,8,9) #firstBlock 6
+pp2 <- c(15, 18, 23,26,32,35) #secondBlock  6
+pp3 <- c(39,46,48,51,52,55,56,57,58, 61,63,65,66,75,76) #thirdBlock  15
+pp4 <- c(101,103,104,113,114,116,118,120,86,89,90) #fourthBlock   11
+pp5 <- c(125, 131, 138, 142, 143, 144, 147, 149, 150)  #fifthBlock   9
+pp_missedTrials <- c(117, 137)
+#Remove problematic subjects
+mydata <- mydata[!(mydata$subjectUniqID %in% c(pp2, pp3, pp4, pp5, pp_missedTrials)),]
+
+length(unique(mydata$subjectUniqID))
+
+#How many missed trials for each subject?
+table_freq <- mydata %>%
+   group_by(subjectUniqID) %>% 
+   summarise_each(funs(Freq=n()))
+
+low_freq <- subset(table_freq, ID_Freq < 250)
+
+```
+
+Pre-processing
+```{r}
+#load file
+#mydata <- read.csv("11_00203_Matress_Folded_23.csv")
+
+#divide into BDM task and ContBDM
+basicBDM <- subset(mydata, TrialType == "Basic")
+#without catch
+#contBDM <- subset(mydata, TrialType == "Low" | TrialType == "Medium" | TrialType == "High")
+#with catch
+contBDM <- subset(mydata, TrialType == "Low" | TrialType == "Medium" | TrialType == "High" | TrialType == "Catch")
+
+#exclude missed trials
+completeFun <- function(data, desiredCols) {
+  completeVec <- complete.cases(data[, desiredCols])
+  return(data[completeVec, ])
+}
+
+#contBDM <- completeFun(contBDM, "SlideValue")
+
+#validate side
+contBDM_right <- subset(contBDM, SideTarget == "Right")
+contBDM_left <- subset(contBDM, SideTarget == "Left")
+  
+#divide contBDM into different context types
+low_con <- subset(contBDM, TrialType == "Low")
+low_right <- subset(low_con, SideTarget == "Right")
+
+medium_con <- subset(contBDM, TrialType == "Medium")
+medium_right <- subset(medium_con, SideTarget == "Right")
+
+high_con <- subset(contBDM, TrialType == "High")
+high_left <- subset(high_con, SideTarget == "Left")
+
+catch_con <- subset(contBDM, TrialType == "Catch")
+
+names <- cbind(catch_con$ItemName, catch_con$ContextItem1, catch_con$ContextItem2)
+names <- as.data.frame(names)
+
+#How many missed trials for each subject in the contBDM?
+table_freq <- contBDM %>%
+   group_by(subjectUniqID) %>% 
+   summarise_each(funs(Freq=n()))
+
+low_freq <- subset(table_freq, ID_Freq < 112)
+
+```
+
+basicBDM - pre-processing
+```{r}
+
+#How many missed trials for each subject?
+data <- basicBDM
+
+table_freq <- data %>%
+   group_by(subjectUniqID) %>% 
+   summarise_each(funs(Freq=n()))
+
+#exclude irrelevant coloumns
+basicBDM = subset(basicBDM, select = -c(Gender, Hand, TrialType, RankTarget, SideTarget, OldValue,TargetLoc,
+                                        ContextItem1, ContextItem2, ContextValue1, ContextValue2,
+                                        ContextRank1, ContextRank2, FullName, Adress))
+                                  
+
+#number of missed trials
+missed <- subset(basicBDM, SlideValue == "NaN")
+
+missed_trials <- NULL
+
+for (ii in unique(basicBDM$subjectUniqID)){
+ temp_data <- basicBDM[basicBDM$subjectUniqID==ii,]
+
+ missed_trials_perSub <- NULL
+ 
+missed_trials_perSub <- nrow(subset(temp_data, SlideValue == "NaN"))
+missed_trials <- c(missed_trials, missed_trials_perSub )
+}
+
+
+
+#Exclude missed trials in slideValue
+completeFun <- function(data, desiredCols) {
+  completeVec <- complete.cases(data[, desiredCols])
+  return(data[completeVec, ])
+}
+
+#basicBDM <- completeFun(basicBDM, "SlideValue")
+
+```
+
+Values given in BDM - each subject
+```{r}
+under_2 <- NULL
+
+#show ranks
+library(plotrix)
+
+for (ii in unique(basicBDM$subjectUniqID)){
+ temp_data <- basicBDM[basicBDM$subjectUniqID==ii,]
+
+ under_2_perSub <- NULL 
+ 
+#Group by item name
+table_item <- temp_data %>%
+    group_by(Category, ItemName) %>% 
+    summarise_each(funs(mean,sd,std.error))
+
+# sort by value
+newdata <- table_item[order(table_item$SlideValue_mean),] 
+newdata_under2 <- newdata[(newdata$SlideValue_mean<=2),]
+
+
+
+#table <- cbind(newdata$Category,newdata$ItemName,newdata$SlideValue_mean,newdata$SlideValue_std.error)
+#table <- as.data.frame(table)
+
+#plot values given in BDM
+#plot(newdata$SlideValue_mean)
+
+x= seq(1,length(newdata$ItemName))
+
+bdm_plot <- ggplot(newdata, aes(x=x, y=SlideValue_mean, color=Category)) + geom_point(size = 2)+
+geom_pointrange(aes(ymin=SlideValue_mean-SlideValue_std.error, ymax=SlideValue_mean+SlideValue_std.error)) +
+labs(title=paste("Subject ID:",ii), x="Product", y = "Mean Bid Amount [NIS]")
+
+b <- bdm_plot + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                            size=20, angle=0),
+  axis.title=element_text(color="black", 
+                             size=20, angle=0)
+)
+
+under_2_perSub <- nrow(newdata_under2)
+under_2 <- c(under_2, under_2_perSub)
+#print(ii)
+#print(nrow(newdata_under2))
+print(b)
+}
+
+under_2  <- cbind(unique(basicBDM$subjectUniqID),under_2 )
+under_2  <- as.data.frame(under_2 )
+colnames(under_2 ) <- c("subject", "under_2")
+
+#write.csv(under_2, "under_2.csv")
+
+```
+
+BDM - correlation between blocks - per subject
+```{r}
+corr_all <- NULL
+
+for (ii in unique(basicBDM$subjectUniqID)){
+  #ii <- 2
+ temp_data <- basicBDM[basicBDM$subjectUniqID==ii,]
+ 
+ corr_perSub <- NULL
+
+#divide into 2 blocks
+block1 <- temp_data[ which(temp_data$Block == 1) , ]
+block2 <- temp_data[ which(temp_data$Block == 2) , ]
+block1_new <- block1[order(block1$ItemName),] 
+block2_new <- block2[order(block2$ItemName),]
+blocks_value <- cbind(block1_new$ItemName, block1_new$SlideValue, block2_new$SlideValue)
+blocks_value <- as.data.frame(blocks_value)
+colnames(blocks_value) <- c('itemName', 'value1', 'value2')
+
+
+plot(blocks_value$value1, blocks_value$value2) 
+corr <- cor.test(blocks_value$value1, blocks_value$value2, use="pairwise.complete.obs")
+print(corr[["estimate"]])
+corr_perSub <- mean(corr[["estimate"]])
+corr_all <- c(corr_all, corr_perSub)
+}
+
+
+
+corr_all <- cbind(unique(basicBDM$subjectUniqID),corr_all)
+corr_all <- as.data.frame(corr_all)
+colnames(corr_all) <- c("subject", "corr")
+
+
+
+low_corr <- subset(corr_all, corr < 0.75)
+
+hist(corr_all$corr)
+boxplot(corr_all$corr)
+```
+
+
+RT
+```{r}
+#boxplot of RT for basicBDM cond for each subject
+cond_f <- basicBDM
+mean <- NULL
+mean_RT <- NULL
+for (ii in unique(cond_f$subjectUniqID)){
+  #ii <- 14
+  mean_perSub <- NULL
+ temp_data <- cond_f[cond_f$subjectUniqID==ii,] 
+
+boxplot(temp_data$SlideRT)
+mean_perSub <- mean(temp_data$SlideRT)
+mean <- c(mean, mean_perSub)
+}
+
+hist(mean)
+
+BDM_table<- cbind(under_2, corr_all, mean, missed_trials)
+
+write.csv(BDM_table, "BDM_table.csv")
+
+mean_RT <- cbind(unique(cond_f$subjectUniqID), mean)
+mean_RT <- as.data.frame(mean_RT)
+colnames(mean_RT) <- c("subject", "mean_RT")
+
+
+```
+
+list of subjects and their sona numbers
+```{r}
+sona_num <- cbind(unique(mydata$subjectUniqID), unique(mydata$Sona))
+sona_num <- as.data.frame(sona_num)
+colnames(sona_num)<- c("subject", "sona")
+
+#save as csv                        
+write.csv(sona_num, "sona_num_block5.csv")
+
+```
+
+create context_mean and context_target_diff
+```{r}
+
+contBDM$context_mean = rowMeans(contBDM[c('ContextValue1', 'ContextValue2')])
+contBDM$context_target_diff = contBDM$context_mean - contBDM$OldValue
+contBDM$abs_context_target_diff = abs(contBDM$context_target_diff)
+contBDM$new_old_diff = contBDM$SlideValue - contBDM$OldValue
+contBDM$y_norm <- (contBDM$SlideValue - contBDM$OldValue)/contBDM$OldValue
+
+
+```
+
+Histograms
+```{r}
+cond_f <- NULL
+#cond_f <- contBDM
+cond_f <- contBDM %>% filter(TrialType != "Catch")
+
+#describe(cond_f$OldValue)
+
+
+hist <- ggplot(cond_f, aes(x = OldValue)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(cond_f$OldValue)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="Old Value", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black")
+  #axis.text.x = element_text(color="black", 
+   #                          size=20, angle=0),
+  #axis.text.y = element_text(color="black", 
+   #                          size=20, angle=0),
+  #axis.text=element_text(size=22),
+  #axis.title=element_text(size=22)
+)
+
+print(hist)
+
+#hist + facet_grid(.~subjectUniqID)
+
+
+```
+
+relationship between different variables
+```{r}
+cond_f <- NULL
+cond_f <- contBDM
+describe(cond_f$OldValue)
+#hist(cond_f$new_old_diff)
+#describe(cond_f$new_old_diff)
+#sd(cond_f$new_old_diff)
+
+#cond_f <- subset(contBDM, TrialType == "Medium")
+#describe(cond_f$context_mean)
+
+#Old value and context_target_diff
+g <- ggplot(cond_f, aes(x=OldValue, y=context_target_diff)) + 
+  geom_point(size= 2)+
+  #geom_smooth(method=lm, size = 2)+
+  #scale_x_continuous(limits=c(0, 20)) +
+  #scale_y_continuous(limits=c(0.4, 0.7))+
+  labs(x="Old Value", y = "context_target_diff")
+
+g + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                             size=22, angle=0),
+  axis.title=element_text(color="black", 
+                             size=22, angle=0))
+
+
+#Old value and context_mean
+g <- ggplot(cond_f, aes(x=OldValue, y=context_mean)) + 
+  geom_point(size= 2)+
+  #geom_smooth(method=lm, size = 2)+
+  #scale_x_continuous(limits=c(0, 20)) +
+  #scale_y_continuous(limits=c(0.4, 0.7))+
+  labs(x="Old Value", y = "context_mean")
+
+g + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                             size=22, angle=0),
+  axis.title=element_text(color="black", 
+                             size=22, angle=0))
+
+###############################################################################################
+#cond_f <- contBDM
+cond_f <- contBDM %>% filter(TrialType != "Catch")
+
+ggpairs(cond_f[, c( "OldValue", "context_mean", "context_target_diff", "SlideValue" )])
+
+ggpairs(cond_f[, c( "OldValue", "context_mean", "abs_context_target_diff", "SlideValue" )])
+
+plot(cond_f$context_mean, cond_f$new_old_diff)
+abline(h=0, col ="blue")
+
+
+hist(contBDM$y_norm)
+plot(cond_f$context_mean, cond_f$y_norm)
+abline(h=0, col ="blue")
+
+p <- plot(cond_f$oldValue, cond_f$context_target_diff)
+abline(h=0, col="blue")
+
+################################################################################################
+cond_f <- contBDM %>% filter(TrialType != "Catch")
+
+cond_f$subjectUniqID <- as.factor(cond_f$subjectUniqID)
+
+g <- ggplot() + geom_point(data = cond_f, aes(x = RankTarget, y = OldValue, color = subjectUniqID), show.legend = FALSE)+
+ labs(x="Ranks", y = "Old Value")
+
+g + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                             size=22, angle=0),
+  axis.title=element_text(color="black", 
+                             size=22, angle=0))
+
+```
+
+
+diffs before and after - per subject and condition (per subject)
+```{r}
+#list of all conditions
+cond_all <- list(low_con, high_con, medium_con, catch_con)
+
+diff_table <- matrix(nrow = length(unique(contBDM$Sona)), ncol = length(cond_all))
+#indicate namuber of row and column
+j <- 1 #row
+r <- 1 #column
+
+#loop over conditions
+for (ii in 1:length(cond_all)){
+ # ii <- 1
+cond_f <- cond_all[[ii]]
+
+#loop over subjects inside a condition
+for (ss in unique(cond_f$subjectUniqID)){
+ # ss<-602
+ temp_data <- cond_f[cond_f$subjectUniqID==ss,]
+
+#Group by item name for each context
+table_item <- temp_data %>%
+    group_by(ItemName) %>% 
+    summarise_each(funs(mean,Freq=n()))
+
+old <- rep(0, length(table_item$ItemName))
+new <- rep(1, length(table_item$ItemName))
+
+old1<- cbind(old,table_item$OldValue_mean)
+new1 <- cbind(new,table_item$SlideValue_mean)
+
+old_new1 <- rbind(old1,new1)
+old_new1 <- as.data.frame(old_new1)
+colnames(old_new1) <- c("cond", "slide_value")
+old_new1$cond <- as.factor(old_new1$cond)
+
+#Bar plot
+gd <- old_new1 %>% 
+        group_by(cond) %>% 
+        summarise(slide_value = mean(slide_value))
+
+p <- ggplot(old_new1, aes(x = cond, y = slide_value, color = cond, fill = cond)) +
+  geom_point(size = 2) +
+  geom_bar(data = gd, stat = "identity", alpha = .5, fill =  c("#FF3232","#C0C0C0") ) +
+  #scale_y_continuous(limits=c(0, 0.8))+
+  #scale_color_manual(values=c("#FF3232","#368FBF")) #low context
+ #scale_color_manual(values=c("#FF3232","#32CD32"))  #high context 
+ scale_color_manual(values=c("#FF3232","#C0C0C0"))  #catch context 
+ 
+p + 
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black", size = 1),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0)
+  #axis.text=element_text(color="black", 
+                            # size=20, angle=0),
+  #axis.title=element_text(color="black", 
+                             #size=20, angle=0)
+)
+
+print(p)
+
+#t.test(table_item$OldValue_mean,table_item$SlideValue_mean,paired=TRUE) # where y1 & y2 are numeric
+#mean(table_item$OldValue_mean)
+#mean(table_item$SlideValue_mean)
+
+#create a table of diffs for each condition
+diff <- table_item$SlideValue_mean - table_item$OldValue_mean #(new-old)
+
+diff_table[j,r] <- mean(diff)
+
+j <- j+1
+}
+#When moving to a new condition, move to the next column and start a new counting of the rows
+r <- r+1
+j <- 1
+}
+
+#convert the matrix to a data frame
+diff_table <- as.data.frame(diff_table)
+diff_table <- cbind(unique(contBDM$subjectUniqID),diff_table)
+colnames(diff_table) <- c("Subject", "Low","High", "Medium", "Catch") 
+
+#save as csv                        
+write.csv(diff_table, "diff_table_online.csv")
+
+```
+
+slide value - before and after for each condition
+```{r}
+#list of all conditions
+#cond_all <- list(low_con, high_con)
+cond_all <- list(low_con, high_con, medium_con, catch_con)
+#loop over conditions
+for (ii in 1:length(cond_all)){
+#ii <- 2
+cond_f <- cond_all[[ii]]
+#Group by subject and item name for each context
+table_item <- cond_f %>%
+    group_by(subjectUniqID) %>% 
+    summarise_each(funs(mean,Freq=n()))
+old <- rep(0, length(table_item$subjectUniqID))
+new <- rep(1, length(table_item$subjectUniqID))
+old1<- cbind(old,table_item$OldValue_mean)
+new1 <- cbind(new,table_item$SlideValue_mean)
+old_new1 <- rbind(old1,new1)
+old_new1 <- as.data.frame(old_new1)
+colnames(old_new1) <- c("cond", "slide_value")
+old_new1$cond <- as.factor(old_new1$cond)
+
+#Bar plot
+gd <- old_new1 %>% 
+        group_by(cond) %>% 
+        summarise(slide_value = mean(slide_value))
+p <- ggplot(old_new1, aes(x = cond, y = slide_value, color = cond, fill = cond)) +
+  geom_point(size = 2) +
+  geom_bar(data = gd, stat = "identity", alpha = .5, fill =  c("#FF3232","#32CD32") ) +
+  scale_y_continuous(limits=c(0, 30))+
+  #scale_color_manual(values=c("#FF3232","#368FBF")) #low context
+ scale_color_manual(values=c("#FF3232","#32CD32"))  #high context 
+ #scale_color_manual(values=c("#FF3232","#C0C0C0"))  #catch context 
+ 
+p + 
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black", size = 1),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0)
+  #axis.text=element_text(color="black", 
+                            # size=20, angle=0),
+  #axis.title=element_text(color="black", 
+                             #size=20, angle=0)
+)
+print(p)
+
+#t.test(table_item$OldValue_mean,table_item$SlideValue_mean,paired=TRUE) # where y1 & y2 are numeric
+#mean(table_item$OldValue_mean)
+#mean(table_item$SlideValue_mean)
+}
+```
+
+violin plot for contBDM results - all subjects
+```{r}
+#list of all conditions
+#cond_all <- list(low_con, high_con)
+cond_all <- list(basicBDM,low_con, medium_con, high_con, catch_con)
+
+table_cond <- NULL
+#loop over conditions - arrange data for the plot (condition, slidevalue)
+for (ii in 1:length(cond_all)){
+  #ii <- 1
+  cond_f <- cond_all[[ii]]
+#Group by subject and item name for each context
+table_item <- cond_f %>%
+    group_by(subjectUniqID) %>% 
+    summarise_each(funs(mean,Freq=n()))
+
+table_cond_perCond1 <- NULL
+table_cond_perCond2 <- NULL
+
+table_cond_perCond1 <- rep(ii, length(table_item$subjectUniqID))
+
+table_cond_perCond2 <- cbind(table_cond_perCond1, table_item$SlideValue_mean)
+
+table_cond <- rbind(table_cond, table_cond_perCond2)
+
+}
+
+table_cond <- as.data.frame(table_cond)
+colnames(table_cond) <- c("cond", "slide_value")
+table_cond$cond <- as.factor(table_cond$cond)
+
+
+gd <- table_cond %>% 
+        group_by(cond) %>% 
+        summarise(slide_value = mean(slide_value))
+
+#violin plot
+p <- ggplot(table_cond, aes(x=cond, y=slide_value, color=cond)) + 
+  geom_violin()
+
+p + stat_summary(fun.y=mean, geom="point", shape=23, size=4) +
+  scale_color_discrete(name = "Cond", labels = c("Basic", "Low", "Medium", "High", "Catch"))+
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                             size=20, angle=0),
+  axis.title=element_text(color="black", 
+                             size=20, angle=0)
+  
+)
+
+#Bar plot - doesn't work yet
+p <- ggplot(table_cond, aes(x = cond, y = slide_value, color = cond, fill = cond)) +
+  geom_point(size = 2) +
+  geom_bar(data = gd, stat = "identity", alpha = .5 ) +
+  scale_y_continuous(limits=c(0, 30))+
+  #scale_color_manual(values=c("#FF3232","#368FBF")) #low context
+ #scale_color_manual(values=c("#FF3232","#32CD32"))  #high context 
+ #scale_color_manual(values=c("#FF3232","#C0C0C0"))  #catch context
+
+p + 
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black", size = 1),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0)
+  #axis.text=element_text(color="black", 
+                            # size=20, angle=0),
+  #axis.title=element_text(color="black", 
+                             #size=20, angle=0)
+)
+print(p)
+
+
+
+```
+
+Convert names of trial type coloum
+```{r}
+cond <- contBDM %>% filter(TrialType != "Catch")
+trialTypeCont <- NULL
+
+for (ii in 1:nrow(cond)){
+  if (cond$TrialType[ii] == "Medium"){
+    trialTypeCont[ii] <- 0
+  }
+  if (cond$TrialType[ii] == "Low"){
+    trialTypeCont[ii] <- 1
+  }
+  if (cond$TrialType[ii] == "High"){
+    trialTypeCont[ii] <- 2}
+}
+
+cond <- cbind(cond, trialTypeCont)
+
+```
+
+Individual results - histograms of diffs
+```{r}
+#Compute diffs for each subject and display an hist of the diffs according to conditions
+library(multcomp)
+library(languageR)
+#library(languageRv1.4.1)
+library(RColorBrewer)
+
+cond_f <- cond
+for (ss in unique(cond_f$subjectUniqID)){
+  ss <- 99
+ 
+  #loop over all subjects
+ temp_data <-  cond_f[cond_f$subjectUniqID==ss,]
+ 
+ #vector of colors (a color for each condition)
+#color_vec <- brewer.pal(n = length(unique(cond_f$trialTypeCont)), name = "Set1")
+
+hist <-  ggplot(temp_data,aes(x=new_old_diff)) + 
+    #geom_histogram(data=subset(temp_data,TrialType == 'Medium'),binwidth=1, colour="black",fill = "blue", alpha = 0.2) +
+    geom_histogram(data=subset(temp_data,TrialType == 'Low'),binwidth=1, colour="black",fill = "red", alpha = 0.2) +
+    geom_histogram(data=subset(temp_data,TrialType == 'High'),binwidth=1, colour="black",fill = "green", alpha = 0.2)+
+  labs(title=paste("Subject ID:",ss), x="new_old_diff", y = "Density")+
+  scale_fill_discrete(name = "Cond", labels = c("Low", "High"))+
+   
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+print(hist) 
+
+}
+
+```
+
+Individual results - histograms of diffs in a different way
+```{r}
+cond_f <- cond
+for (ss in unique(cond_f$subjectUniqID)){
+ # ss <- 99
+ 
+  #loop over all subjects
+ temp_data <-  cond_f[cond_f$subjectUniqID==ss,]
+
+plot_multi_histogram <- function(df, feature, label_column) {
+    plt <- ggplot(df, aes(x=eval(parse(text=feature)), fill=eval(parse(text=label_column)))) +
+    geom_histogram(alpha=0.7, position="identity", aes(y = ..density..), color="black") +
+    geom_density(alpha=0.7) +
+    geom_vline(aes(xintercept=mean(eval(parse(text=feature)))), color="black", linetype="dashed", size=1) +
+    labs(x=feature, y = "Density")
+    plt + guides(fill=guide_legend(title=label_column))
+}
+p <- plot_multi_histogram(temp_data, 'new_old_diff', 'TrialType')+
+   labs(title=paste("Subject ID:",ss), x="new_old_diff", y = "Density")+
+  
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+print(p)  
+}
+```
+
+RT - analyses
+```{r}
+#Summary of RTs
+cond_f <- cond
+describe(cond_f$SlideRT)
+boxplot(cond_f$SlideRT)
+hist(cond_f$SlideRT)
+
+cond_f <- cond_f %>% filter(SlideRT > 500)
+
+#per subject
+cond_f <-low_high
+for (ss in unique(cond_f$Subject)){
+# ss<-611
+ temp_data <- cond_f[cond_f$Subject==ss,]
+ boxplot(temp_data$SlideRT)
+}
+ 
+ 
+ 
+#RT as a function of other variables
+#plot(cond_f$order_items,cond_f$SlideRT)
+
+reg<-lm(SlideRT ~ TrialPerTask, data = cond_f)
+plot(cond_f$TrialPerTask,cond_f$SlideRT)
+abline(reg, col="blue")
+cor.test(cond_f$TrialPerTask,cond_f$SlideRT)
+
+
+
+```
+
+GLM
+```{r}
+cond_f <- contBDM
+
+#cond_f <- contBDM %>% filter(TrialType != "Catch")
+
+mymodel.null = lmer(SlideValue ~ OldValue  + (1 | subjectUniqID),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel.null)
+
+mymodel = lmer(SlideValue ~ OldValue  + TrialType + (1 | subjectUniqID),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+
+```
+
+
+
+GLM - contrast (comparison to medium)
+```{r}
+cond_f <- cond
+#Exclude trials that are under 500 ms
+cond_f <- cond_f %>% filter(SlideRT > 500)
+#Categorial variables
+cond_f$trialTypeCont <- as.factor(cond_f$trialTypeCont)
+cond_f$Gender <- as.factor(cond_f$Gender)
+cond_f$Hand <- as.factor(cond_f$Hand)
+cond_f$Block <- as.factor(cond_f$Block)
+
+mymodel.null = lmer(SlideValue ~ OldValue  + (1 | subjectUniqID),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel.null)
+
+mymodel = lmer(SlideValue ~ OldValue + trialTypeCont + (1 | subjectUniqID),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+mymodel = lmer(SlideValue ~ OldValue + trialTypeCont + Category + Gender + Hand + Block + (1 | subjectUniqID),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+#RT
+mymodel = lmer(SlideRT ~ OldValue + trialTypeCont + (1 | subjectUniqID),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+
+```
