@@ -1,0 +1,2489 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+rm(list = ls())  
+#work computer
+#mywd="C:/Users/User/Dropbox/SharedEbbin/Task/Results/pilot_v3"
+#home computer
+mywd="C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v3"
+setwd(mywd)
+
+#Install libraries
+#install and read package for reading ecxel files
+#install.packages("readxl")
+##install.packages("dplyr")
+#install.packages("caTools")
+#install.packages("ggplot2")
+#install.packages("GGally")
+#install.packages("reshape2")
+#install.packages("lme4")
+#install.packages("compiler")
+#install.packages("parallel")
+#install.packages("boot")
+#install.packages("lattice")
+#install.packages("sjPlot")
+#install.packages("sjlabelled")
+#install.packages("sjmisc")
+#install.packages("ggplot2")
+#install.packages("languageR")
+#install.packages("plotly")
+#install.packages("languageRv1.4.1")
+#install.packages("multcomp")
+#install.packages("plotrix")
+
+#install.packages("ggpubr")
+#install.packages("devtools")
+
+#install.packages("effsize")
+
+
+library(devtools)
+##library(ggpubr)
+
+##install_github("easyGgplot2", "kassambara")
+
+#Load libraries
+library("readxl")
+library(caTools)
+library("dplyr")
+require(ggplot2)
+require(GGally)
+require(reshape2)
+require(lme4)
+require(compiler)
+require(parallel)
+require(boot)
+require(lattice)
+library(sjPlot)
+library(sjlabelled)
+library(sjmisc)
+library(languageR)
+library(multcomp)
+library(effsize)
+library(ggpubr)
+
+#mydata <- read.csv("ValuePerception-0-choice.csv")
+
+```
+ 
+Insert perception threshold to the main data set - pilot v3
+```{r}
+percept_threshold <- c(8.470565585,
+11.65805508,
+7.618563403,
+9.550806981,
+4.292254177,
+9.922759573,
+3.389661922,
+9.875500829,
+13.1812133,
+3.946466499,
+5.522561321,
+3.332571288,
+12.54491511
+)
+
+
+percept_threshold_rep <- rep(percept_threshold, each = 300)
+
+#slopes from transposed data
+#percept_slope <- c(0.327428505, 0.225191223, 0.364145479, 0.457497755, 0.477770363, 0.153681849, 0.381418521, 0.509231735, 0.707449886, 0.876649834, 0.660586866, 0.438189418, 0.367491257)
+
+#slopes from non-transposed data (from random slope model)
+#percept_slope <- c(0.09784554, 0.05891738, 0.12641929, 0.08601097, 0.20995291, 0.06620980, 0.21606553, 0.08215208, 0.03564370, 0.24623518, 0.18907364, 0.21408459, 0.05475835)
+
+#slopes from non-transposed data (from each subject seperatly)
+#percept_slope <- c( 0.10119353, 0.05620131, 0.12481882, 0.07982303, 0.23857120, 0.05986925, 0.24597558, 0.07492296, 0.02807376, 0.30845701, 0.21137708, 0.25560511, 0.04750661)
+
+#slopes from non-transposed data (from each subject seperatly)_all
+percept_slope <- c( 0.10119353, 0.05620131, 0.12481882, 0.07982303, 0.23857120, 0.05986925, 0.24597558, 0.07492296, 0.02807376, 0.30845701, 0.21137708, 0.25560511, 0.04750661, 0.1051487,
+0.09042828,
+0.06547715,
+0.07677295,
+0.12641617,
+0.18173099,
+0.26936145,
+0.38780503,
+0.09612031)
+
+
+percept_slope_rep <- rep(percept_slope, each = 300)
+
+```
+
+Concatenate several data frames
+```{r}
+
+setwd("C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v3")
+ldf <- list() # creates a list
+listcsv <- dir(pattern = "choice.*csv") # creates the list of all the bdm-csv files in the directory
+for (k in 1:length(listcsv)){
+ ldf[[k]] <- read.csv(listcsv[k],header=T, na.strings=c("","NA"))
+ if(ncol(ldf[[k]])>35){
+ ldf[[k]] <- ldf[[k]][,-(36)] #delete extra column
+ }
+}
+#str(ldf[[1]]) 
+
+
+mydata <- do.call("rbind", ldf)
+#data <- data[,-(36)]
+
+#dat2 <- read.csv("data2.csv", header=T, na.strings=c("","NA"))
+
+#mydata  <- data[!(data$Subject %in% c(0,32,6969,8915)),]
+#mydata <- mydata[complete.cases(mydata), ]
+#mydata <- data[(data$Subject > 112),] #pilot v1
+#mydata <- data[(data$Subject > 125),] #pilot V2
+#mydata <- data[(data$Subject > 200) ,] #pilot V3
+#mydata <- data[(data$Subject > 300),] #pilot V4
+#mydata <- data[(data$Subject > 400),] #pilot V5
+
+
+#Problematic subjects (problem with BDM)
+#pp <- c(114,118,119,124,127) #pilot v1
+#pp <- c(132,137,149,152,156,157) #pilot 2
+pp <- c(203,204, 225, 228) #pilot 3_all
+#pp <- c(225, 228,222,220) #pilot 3_att
+#pp <- c(405,406) #pilot 5
+#131 prblematic data set
+#Remove problematic subjects
+mydata <- mydata[!(mydata$Subject %in% pp),]
+
+#mydata <- cbind(mydata,percept_slope_rep)
+
+unique(mydata$Subject)
+
+#filter missed trials
+mydata <- subset(mydata,(Click == 1 | Click == 2) )
+
+table_freq <- mydata %>%
+   group_by(Subject) %>% 
+   summarise_each(funs(Freq=n()))
+
+#temp_data <- mydata[(mydata$Subject == 131),]
+
+```
+
+Pre-processing  
+
+```{r}
+#Subset
+mydata <- mydata[ which(mydata$LeftRank > 21 & mydata$LeftRank < 40 ), ]
+mydata <- mydata[ which(mydata$RightRank > 21 & mydata$RightRank < 40 ), ]
+#Munge the data
+mydata$D_Ranks <- as.numeric(mydata$D_Ranks)
+#Add a column of abs D_Ranks
+mydata$abs_D_Ranks <- abs(mydata$D_Ranks)
+#Add a columm of attention (1=was, 0=wasn't)
+##subjects 216-228 had attention trials
+mydata$att <- ifelse(mydata$Subject>215,1,0)
+
+#divide into 2 data sets
+base_cond <- mydata[ which(mydata$LeftContext == "None") , ]
+ebbin_cond <- mydata[ which(mydata$LeftContext == "High" | mydata$LeftContext == "Low" ), ]
+
+#Only small differences
+#base_cond1 <- base_cond[ which(base_cond$D_Ranks < max(base_cond$D_Ranks)/3 & base_cond$D_Ranks > min(base_cond$D_Ranks)/3) , ]
+
+#Inside ebbin_cond devide into different sub-conditions: Hh, Hl, hh, ll
+cond_s <- ebbin_cond
+#cond_s <- cond
+#divide ebbin_cond into bins - range of abs(D_R_Ranks)= 1:22
+ranks_min <- cond_s[ which(cond_s$abs_D_Ranks <= 11) , ]
+#ranks_medium <- cond_s[ which(cond_s$abs_D_Ranks >= 9 & cond_s$abs_D_Ranks <= 15) , ]
+ranks_max <- cond_s[ which(cond_s$abs_D_Ranks >= 12 ) , ]
+
+#Inside ebbin_cond devide into different sub-conditions: Hh, Hl, hh, ll
+Hh_cond <- cond_s[ which(cond_s$TrialType == "HL") , ] #high T on high context
+Hl_cond <- cond_s[ which(cond_s$TrialType == "LH") , ] #high T on low context
+
+Hh_Hl <- cond_s[ which(cond_s$TrialType == "HL" | cond_s$TrialType == "LH") , ] #both conditions
+#add binary variable of cond type
+Hh_Hl$cond_type <- ifelse(Hh_Hl$TrialType == "HL" , 1, 0) #1=HL (Hh), 0 = LH (Hl)
+Hh_Hl$cond_type <- as.factor(Hh_Hl$cond_type)
+
+ranks_min_Hh_Hl <- Hh_Hl[ which(Hh_Hl$abs_D_Ranks <= 11) , ]
+#ranks_medium <- cond_s[ which(cond_s$abs_D_Ranks >= 9 & cond_s$abs_D_Ranks <= 15) , ]
+ranks_max_Hh_Hl <- Hh_Hl[ which(Hh_Hl$abs_D_Ranks >= 12 ) , ]
+
+hh_cond <-  cond_s[ which(cond_s$TrialType == "HH"),] #both contexts high
+ll_cond <-  cond_s[ which(cond_s$TrialType == "LL"),] #both contexts low
+
+HH_LL_cond <- cond_s[ which(cond_s$TrialType == "HH" | cond_s$TrialType == "LL") , ] 
+
+#How many trials of each condition in the ebbin cond?
+summary(ebbin_cond$TrialType)
+```
+
+load basic BDM data
+```{r}
+
+setwd("C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v3")
+ldf <- list() # creates a list
+listcsv <- dir(pattern = "bdm.*csv") # creates the list of all the bdm-csv files in the directory
+for (k in 1:length(listcsv)){
+ ldf[[k]] <- read.csv(listcsv[k])
+}
+#str(ldf[[1]]) 
+
+basicBDM <- do.call("rbind", ldf)
+
+#mydata  <- data[data$Subject %in% c(113,114,115,116,117,118),]
+#mydata <- data[(data$Subject > 112),] #pilot V1
+#mydata <- data[(data$Subject > 200),] #pilot V3
+#mydata <- data[(data$Subject > 300),] #pilot V4
+#mydata <- data[(data$Subject > 400),] #pilot V5
+basicBDM <- basicBDM[complete.cases(basicBDM), ]
+#basicBDM <- basicBDM[,-(4)]
+
+#Problematic subjects (problem with BDM)
+#pp <- c(114,118,119,124) #pilot v1
+#pp <- c(127,132,137,149,156,157) #pilot v2
+#pp <- c(203,204) #pilot v3
+pp <- c(203,204, 225, 228) #pilot 3 all
+#pp <- c(601,604,605) #pilot 6
+#Remove problematic subjects
+basicBDM <- basicBDM[!(basicBDM$Subject %in% pp),]
+
+length(unique(basicBDM$Subject))
+
+
+table_freq <- basicBDM %>%
+   group_by(Subject) %>% 
+   summarise_each(funs(Freq=n()))
+
+```
+
+Build dictionary
+```{python}
+def getVal(str):
+  print("will check: "+str)
+  import csv
+  res={}
+  with open('dict.csv', mode='r') as infile:
+    reader = csv.DictReader(infile, delimiter=',')
+    for row in reader:
+          res[row['ItemName']]=row['mean_value']
+  print("found that - "+str+":"+res[str]+" (will cast it to float and return)")
+  return float(res[str])
+getVal("Vodka")
+
+
+```
+
+Add a vector of mean context values for high context
+```{r}
+library(reticulate)
+##Build a dictionary of the original values of the products for each subject according to BDM basic
+cond_f <- basicBDM #build dictionary from the basic BDM data
+cond_m <- Hh_Hl #use the dictionary to calculate the context of each trial in the context task
+#create an empty vector of context_value
+
+high_context_value <- NULL
+
+
+#loop over all subjects inside mydata
+for (ss in unique(cond_f$Subject)){
+#ss<-201
+ temp_data <- cond_f[cond_f$Subject==ss,]
+
+ high_context_value_perSub <- NULL
+ #low_context_value_perSub <- NULL
+ 
+ #Group by item name
+ table_item <- temp_data %>%
+  group_by(ItemName) %>%
+  summarize(mean_value = mean(SlideValue))
+ 
+#Create a dictionary of item name and count
+  items_dict<- NULL
+  data <- table_item 
+  
+  #save as csv                        
+write.csv(data, "dict.csv")
+
+#Use the dictinary
+#loop over all trials in the Hl_Hh condition
+ temp_data2 <- cond_m[cond_m$Subject==ss,]
+for (ii in 1:nrow(temp_data2)){
+ #ii = 1
+   tryCatch(
+  source_python("helpers.py"),
+   error=function(e) e
+    )
+  #what side is the high context?
+  ##if the high context is on the left:
+  if(temp_data2$LeftContext[ii] == "High" ){
+    cmd<-paste("res=getVal('",temp_data2$LeftContext1[ii],"')",sep="")
+   #print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    high_Context1 <- py$res
+    
+    cmd<-paste("res=getVal('",temp_data2$LeftContext2[ii],"')",sep="")
+    #print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    high_Context2 <- py$res
+    high_context_value_perSub[ii] <-mean(c(high_Context1 ,high_Context2))
+     ###if the high context is on the right side
+  }else{
+    cmd<-paste("res=getVal('",temp_data2$RightContext1[ii],"')",sep="")
+    #print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    
+    high_Context1  <- py$res
+    
+    cmd<-paste("res=getVal('",temp_data2$RightContext2[ii],"')",sep="")
+   # print(cmd)
+    tryCatch(
+      py_run_string(cmd),
+      error=function(e) e
+    )
+    
+    high_Context2 <- py$res
+    high_context_value_perSub[ii] <-mean(c(high_Context1 ,high_Context2))
+    }
+   
+ }
+
+
+#order_items_perSub <- t(order_items_perSub)
+high_context_value <- c(high_context_value, high_context_value_perSub)
+# order_items <- as.factor(order_items)  
+#summary(order_items)
+}
+
+Hh_Hl <- cbind(Hh_Hl, high_context_value)
+
+#Hh_Hl$context_target_diff <- lHh_Hl$context_value - low_high$OldValue
+
+#low_high$abs_context_target_diff <- abs(low_high$context_value - low_high$OldValue)
+
+```
+
+Add a vector of mean context values for low context
+```{r}
+library(reticulate)
+##Build a dictionary of the original values of the products for each subject according to BDM basic
+cond_f <- basicBDM #build dictionary from the basic BDM data
+cond_m <- Hh_Hl #use the dictionary to calculate the context of each trial in the context task
+#create an empty vector of context_value
+
+low_context_value <- NULL
+
+
+#loop over all subjects inside mydata
+for (ss in unique(cond_f$Subject)){
+#ss<-201
+ temp_data <- cond_f[cond_f$Subject==ss,]
+
+ low_context_value_perSub <- NULL
+ #low_context_value_perSub <- NULL
+ 
+ #Group by item name
+ table_item <- temp_data %>%
+  group_by(ItemName) %>%
+  summarize(mean_value = mean(SlideValue))
+ 
+#Create a dictionary of item name and count
+  items_dict<- NULL
+  data <- table_item 
+  
+  #save as csv                        
+write.csv(data, "dict.csv")
+
+#Use the dictinary
+#loop over all trials in the Hl_Hh condition
+ temp_data2 <- cond_m[cond_m$Subject==ss,]
+for (ii in 1:nrow(temp_data2)){
+ #ii = 1
+   tryCatch(
+  source_python("helpers.py"),
+   error=function(e) e
+    )
+  #what side is the low context?
+  ##if the low context is on the left:
+  if(temp_data2$LeftContext[ii] == "Low" ){
+    cmd<-paste("res=getVal('",temp_data2$LeftContext1[ii],"')",sep="")
+   #print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    low_Context1 <- py$res
+    
+    cmd<-paste("res=getVal('",temp_data2$LeftContext2[ii],"')",sep="")
+    #print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    low_Context2 <- py$res
+    low_context_value_perSub[ii] <-mean(c(low_Context1 ,low_Context2))
+     ###if the low context is on the right side
+  }else{
+    cmd<-paste("res=getVal('",temp_data2$RightContext1[ii],"')",sep="")
+    #print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    
+    low_Context1  <- py$res
+    
+    cmd<-paste("res=getVal('",temp_data2$RightContext2[ii],"')",sep="")
+   # print(cmd)
+    tryCatch(
+      py_run_string(cmd),
+      error=function(e) e
+    )
+    
+    low_Context2 <- py$res
+    low_context_value_perSub[ii] <-mean(c(low_Context1 ,low_Context2))
+    }
+   
+ }
+
+
+#order_items_perSub <- t(order_items_perSub)
+low_context_value <- c(low_context_value, low_context_value_perSub)
+# order_items <- as.factor(order_items)  
+#summary(order_items)
+}
+
+Hh_Hl <- cbind(Hh_Hl, low_context_value)
+
+#Hh_Hl$context_target_diff <- lHh_Hl$context_value - low_high$OldValue
+
+#low_high$abs_context_target_diff <- abs(low_high$context_value - low_high$OldValue)
+
+```
+
+Histograms of D_ranks
+```{r}
+for (ii in unique(mydata$Subject)){
+ temp_data <- mydata[mydata$Subject==ii,]
+
+#Histogram of the Ds
+hist <- ggplot(temp_data, aes(x=temp_data$D_Ranks)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(temp_data$D)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="Rank difference", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+print(hist)
+}
+```
+
+Histograms - different
+```{r}
+##ii = 00085
+for (ii in unique(mydata$Subject)){
+ temp_data <- mydata[mydata$Subject==ii,]
+ 
+#temp_data$sum_rank <- temp_data$LeftRank + temp_data$RightRank
+#temp_data$sum_rank  <- as.numeric(temp_data$sum_rank)
+
+
+#base_cond <- temp_data[which(temp_data$TrialType == "Choice") , ]
+#HL_cond <- temp_data[which(temp_data$TrialType == "HL") , ]
+#LH_cond <- temp_data[which(temp_data$TrialType == "LH") , ]
+
+#HH_LL_cond <- temp_data[ which(temp_data$TrialType == "HH" | temp_data$TrialType == "LL") , ]
+
+#data <- HL_cond
+
+#Histogram of D-ranks - abs
+ggplot(temp_data , aes(x=temp_data$D_Ranks)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+ # geom_vline(aes(xintercept=mean(data$D_Ranks)), color="#368FBF",
+  #           linetype="dashed", size = 2)+
+  labs(x="Difference between ranks", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+print(hist)
+}
+#Histogram of D-ranks
+ggplot(data , aes(x=data$D_Ranks)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(data$D_Ranks)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="Difference between ranks", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+#Histogram of ranks
+ggplot(data, aes(x=data$sum_rank)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(sum_rank)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="sum ranks", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+#Histogram of ranks
+ggplot(mydata, aes(x=mydata$LeftRank)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(LeftRank)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="Ranks", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+data <- HL_cond
+
+#plot sum ranks as a function of D_ranks
+plot(abs(data$D_Ranks), data$sum_rank)
+
+#Histogram of all ranks
+#concatenate left_ranks and right_ranks
+ranks <- rbind(data$LeftRank, data$RightRank)
+ranks <- as.numeric(ranks)
+ranks <- as.data.frame(ranks)
+
+ggplot(ranks, aes(x=ranks)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(ranks)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="Ranks", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+```
+
+Accuracy - according to 3 bins
+```{r}
+library("dplyr")
+
+#pilot V1
+#divide ebbin_cond into bins - range of abs(D_Ranks)= 1:22
+
+#pilot V2
+#divide ebbin_cond into bins - range of abs(D_Ranks)= 1:32
+sort(unique(mydata$abs_D_Ranks))
+
+#num_min <- 11 
+#num_max <- 12
+num_min <- 8
+num_max <- 17
+  
+cond_s <- NULL
+cond_s <- base_cond
+ranks_min_base <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_base <- cond_s[ which(cond_s$abs_D_Ranks >= (num_min+1) & cond_s$abs_D_Ranks <= (num_max-1)) , ]
+ranks_max_base <- cond_s[ which(cond_s$abs_D_Ranks >= num_max ) , ]
+
+cond_s <- NULL
+cond_s <- Hh_cond
+ranks_min_Hh <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_Hh <- cond_s[ which(cond_s$abs_D_Ranks >= (num_min+1) & cond_s$abs_D_Ranks <= (num_max-1)) , ]
+ranks_max_Hh <- cond_s[ which(cond_s$abs_D_Ranks >= num_max ) , ]
+
+cond_s <- NULL
+cond_s <- Hl_cond
+ranks_min_Hl <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_Hl <- cond_s[ which(cond_s$abs_D_Ranks >= (num_min+1) & cond_s$abs_D_Ranks <= (num_max-1)) , ]
+ranks_max_Hl <- cond_s[ which(cond_s$abs_D_Ranks >= num_max ) , ]
+
+library(plotrix)
+
+#Group by subject
+table_min_base <- ranks_min_base %>%
+    group_by(Subject) %>% 
+     summarise_each(funs(mean, Freq=n()))
+
+table_medium_base <- ranks_medium_base %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_max_base <- ranks_max_base %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_min_Hh <- ranks_min_Hh %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hh <- ranks_medium_Hh %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_max_Hh <- ranks_max_Hh  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_min_Hl <- ranks_min_Hl  %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hl <- ranks_medium_Hl  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_max_Hl <- ranks_max_Hl  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+#Create one table - accuracies
+all_table <- cbind(table_min_base$Subject, table_min_base$Correct_mean, table_medium_base$Correct_mean, table_max_base$Correct_mean, table_min_Hh$Correct_mean, table_medium_Hh$Correct_mean, table_max_Hh$Correct_mean, table_min_Hl$Correct_mean, table_medium_Hl$Correct_mean, table_max_Hl$Correct_mean)
+
+colnames(all_table) <- c("Subject", "Basic_min","Basic_medium", "Basic_max", "Hh_min","Hh_medium", "Hh_max", "Hl_min", "Hl_medium","Hl_max"
+                         )
+all_table <- as.data.frame(all_table)
+
+#save as an excel file
+write.csv(all_table, "value_acc_bins_3_pilotV3.csv")
+
+#Create table of frenqucies
+table_freq <- cbind(table_min_base$Subject, table_min_base$Correct_Freq, table_medium_base$Correct_Freq, table_max_base$Correct_Freq, table_min_Hh$Correct_Freq, table_medium_Hh$Correct_Freq, table_max_Hh$Correct_Freq, table_min_Hl$Correct_Freq, table_medium_Hl$Correct_Freq, table_max_Hl$Correct_Freq)
+
+colnames(table_freq) <- c("Subject", "Basic_min","Basic_medium", "Basic_max", "Hh_min","Hh_medium", "Hh_max", "Hl_min", "Hl_medium","Hl_max"
+                         )
+table_freq <- as.data.frame(table_freq)
+
+#ttest for medium bins
+y1 <- all_table$Basic_medium
+y2 <- all_table$Hh_medium
+t.test(y1,y2,paired=TRUE) # where y1 & y2 are numeric
+
+#effect size
+cohen.d(y1 ,y2)
+
+```
+
+Accuracy - according to 4 bins 
+
+```{r}
+library("dplyr")
+
+
+#divide ebbin_cond into bins - range of abs(D_Ranks)= 1:22
+sort(unique(mydata$abs_D_Ranks))
+#num_bins <- 5
+#max(unique(mydata$abs_D_Ranks))/num_bins
+#num_min <- 11 
+#num_max <- 12
+num_min <- 4
+num_med <- 10
+num_max <- 16
+  
+cond_s <- NULL
+cond_s <- base_cond
+ranks_min_base <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_base1 <- cond_s[ which(cond_s$abs_D_Ranks >= num_min+1 & cond_s$abs_D_Ranks <= num_med) , ]
+ranks_medium_base2 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med+1 & cond_s$abs_D_Ranks <= num_max-1) , ]
+ranks_max_base <- cond_s[ which(cond_s$abs_D_Ranks >= num_max ) , ]
+
+cond_s <- NULL
+cond_s <- Hh_cond
+ranks_min_Hh <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_Hh1 <- cond_s[ which(cond_s$abs_D_Ranks >= num_min+1 & cond_s$abs_D_Ranks <= num_med) , ]
+ranks_medium_Hh2 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med+1 & cond_s$abs_D_Ranks <= num_max-1) , ]
+ranks_max_Hh <- cond_s[ which(cond_s$abs_D_Ranks >= num_max ) , ]
+
+cond_s <- NULL
+cond_s <- Hl_cond
+ranks_min_Hl <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_Hl1 <- cond_s[ which(cond_s$abs_D_Ranks >= num_min+1 & cond_s$abs_D_Ranks <= num_med) , ]
+ranks_medium_Hl2 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med+1 & cond_s$abs_D_Ranks <= num_max-1) , ]
+ranks_max_Hl <- cond_s[ which(cond_s$abs_D_Ranks >= num_max ) , ]
+
+library(plotrix)
+
+#Group by subject
+table_min_base <- ranks_min_base %>%
+    group_by(Subject) %>% 
+     summarise_each(funs(mean, Freq=n()))
+
+table_medium_base1 <- ranks_medium_base1 %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_medium_base2 <- ranks_medium_base2 %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_max_base <- ranks_max_base %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_min_Hh <- ranks_min_Hh %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hh1 <- ranks_medium_Hh1 %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hh2 <- ranks_medium_Hh2 %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_max_Hh <- ranks_max_Hh  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_min_Hl <- ranks_min_Hl  %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hl1 <- ranks_medium_Hl1  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hl2 <- ranks_medium_Hl2  %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_max_Hl <- ranks_max_Hl  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+all_table <- cbind(table_min_base$Subject, table_min_base$Correct_mean, table_medium_base1$Correct_mean, table_medium_base2$Correct_mean, table_max_base$Correct_mean, table_min_Hh$Correct_mean, table_medium_Hh1$Correct_mean, table_medium_Hh2$Correct_mean, table_max_Hh$Correct_mean, table_min_Hl$Correct_mean, table_medium_Hl1$Correct_mean, table_medium_Hl2$Correct_mean, table_max_Hl$Correct_mean)
+
+colnames(all_table) <- c("Subject", "Basic_min","medium1","medium2","Basic_max", "Hh_min","Hh_medium1","Hh_medium2", "Hh_max", "Hl_min", "Hl_medium1","Hl_medium2","Hl_max"
+                         )
+all_table <- as.data.frame(all_table)
+
+#save as an excel file
+write.csv(all_table, "value_acc_bins_4_pilotV5.csv")
+
+#ttest for medium bins
+y1 <- all_table$Hh_medium2
+y2 <- all_table$Hl_medium2
+t.test(y1,y2,paired=TRUE) # where y1 & y2 are numeric
+
+#effect size
+cohen.d(y1 ,y2)
+
+#Bar plot
+mean_base <- mean(all_table$Hh_max)
+mean_ebbin <- mean(all_table$Hl_max)
+
+means = c(mean_base, mean_ebbin) 
+
+cols <- c("gray", "darkred")
+barplot(means,
+space=2,
+col = cols)
+
+#Create table of frenqucies
+table_freq <- cbind(table_min_base$Subject, table_min_base$Correct_Freq, table_medium_base1$Correct_Freq, table_medium_base2$Correct_Freq, table_max_base$Correct_Freq, table_min_Hh$Correct_Freq, table_medium_Hh1$Correct_Freq, table_medium_Hh2$Correct_Freq, table_max_Hh$Correct_Freq, table_min_Hl$Correct_Freq, table_medium_Hl1$Correct_Freq, table_medium_Hl2$Correct_Freq, table_max_Hl$Correct_Freq)
+
+colnames(table_freq) <- c("Subject", "Basic_min","Basic_medium1", "Basic_medium2", "Basic_max", "Hh_min","Hh_medium1", "Hh_medium2", "Hh_max", "Hl_min", "Hl_medium1","Hl_medium2", "Hl_max"
+                         )
+table_freq <- as.data.frame(table_freq)
+
+#all ranks - in all conditions
+table_bins <- mydata %>%
+    group_by(TrialType, abs_D_Ranks) %>% 
+     summarise(mean_acc = mean(Correct))
+
+table_bins <- table_bins[!(table_bins$TrialType %in% c("HH","LL")),]
+
+ggscatter(table_bins, x = "abs_D_Ranks", y = "mean_acc",
+                add = "loess",               # Add regression line
+                conf.int = FALSE,                # Add confidence interval
+                color = "TrialType", palette = "jco", # Color by groups "cyl"
+                shape = "TrialType"                   # Change point shape by groups "cyl"
+                )
+
+
+
+```
+
+Accuracy - according to 5 bins 
+```{r}
+library("dplyr")
+
+
+#divide ebbin_cond into bins - range of abs(D_Ranks)= 1:22
+sort(unique(mydata$abs_D_Ranks))
+#num_bins <- 5
+#max(unique(mydata$abs_D_Ranks))/num_bins
+#num_min <- 11 
+#num_max <- 12
+num_min <- 4
+num_med1 <- 7
+num_med2 <- 10
+num_max <- 16
+  
+cond_s <- NULL
+cond_s <- base_cond
+ranks_min_base <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_base1 <- cond_s[ which(cond_s$abs_D_Ranks >= num_min+1 & cond_s$abs_D_Ranks <= num_med1) , ]
+ranks_medium_base2 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med1+1 & cond_s$abs_D_Ranks <= num_med2) , ]
+ranks_medium_base3 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med2+1 & cond_s$abs_D_Ranks <= num_max) , ]
+ranks_max_base <- cond_s[ which(cond_s$abs_D_Ranks >= num_max+1 ) , ]
+
+cond_s <- NULL
+cond_s <- Hh_cond
+ranks_min_Hh <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_Hh1 <- cond_s[ which(cond_s$abs_D_Ranks >= num_min+1 & cond_s$abs_D_Ranks <= num_med1) , ]
+ranks_medium_Hh2 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med1+1 & cond_s$abs_D_Ranks <= num_med2) , ]
+ranks_medium_Hh3 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med2+1 & cond_s$abs_D_Ranks <= num_max) , ]
+ranks_max_Hh <- cond_s[ which(cond_s$abs_D_Ranks >= num_max+1 ) , ]
+
+cond_s <- NULL
+cond_s <- Hl_cond
+ranks_min_Hl <- cond_s[ which(cond_s$abs_D_Ranks <= num_min) , ]
+ranks_medium_Hl1 <- cond_s[ which(cond_s$abs_D_Ranks >= num_min+1 & cond_s$abs_D_Ranks <= num_med1) , ]
+ranks_medium_Hl2 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med1+1 & cond_s$abs_D_Ranks <= num_med2) , ]
+ranks_medium_Hl3 <- cond_s[ which(cond_s$abs_D_Ranks >= num_med2+1 & cond_s$abs_D_Ranks <= num_max) , ]
+ranks_max_Hl <- cond_s[ which(cond_s$abs_D_Ranks >= num_max+1 ) , ]
+
+library(plotrix)
+
+#Group by subject
+table_min_base <- ranks_min_base %>%
+    group_by(Subject) %>% 
+     summarise_each(funs(mean, Freq=n()))
+
+table_medium_base1 <- ranks_medium_base1 %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_medium_base2 <- ranks_medium_base2 %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_medium_base3 <- ranks_medium_base3 %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_max_base <- ranks_max_base %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_min_Hh <- ranks_min_Hh %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hh1 <- ranks_medium_Hh1 %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hh2 <- ranks_medium_Hh2 %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hh3 <- ranks_medium_Hh3 %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_max_Hh <- ranks_max_Hh  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_min_Hl <- ranks_min_Hl  %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hl1 <- ranks_medium_Hl1  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hl2 <- ranks_medium_Hl2  %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_medium_Hl3 <- ranks_medium_Hl3  %>%
+    group_by(Subject) %>% 
+   summarise_each(funs(mean, Freq=n()))
+
+table_max_Hl <- ranks_max_Hl  %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean, Freq=n()))
+
+all_table <- cbind(table_min_base$Subject, table_min_base$Correct_mean, table_medium_base1$Correct_mean, table_medium_base2$Correct_mean, table_medium_base3$Correct_mean, table_max_base$Correct_mean, table_min_Hh$Correct_mean, table_medium_Hh1$Correct_mean, table_medium_Hh2$Correct_mean, table_medium_Hh3$Correct_mean, table_max_Hh$Correct_mean, table_min_Hl$Correct_mean, table_medium_Hl1$Correct_mean, table_medium_Hl2$Correct_mean, table_medium_Hl3$Correct_mean, table_max_Hl$Correct_mean)
+
+colnames(all_table) <- c("Subject", "Basic_min","medium1","medium2", "medium3","Basic_max", "Hh_min","Hh_medium1","Hh_medium2", "Hh_medium3", "Hh_max", "Hl_min", "Hl_medium1","Hl_medium2","Hl_medium3","Hl_max"
+                         )
+all_table <- as.data.frame(all_table)
+
+#save as an excel file
+write.csv(all_table, "value_acc_bins_5_pilotV3.csv")
+
+#ttest for medium bins
+y1 <- all_table$Hh_medium3
+y2 <- all_table$Hl_medium3
+t.test(y1,y2,paired=TRUE) # where y1 & y2 are numeric
+
+#effect size
+cohen.d(y1 ,y2)
+
+#Create table of frenqucies
+table_freq <- cbind(table_min_base$Subject, table_min_base$Correct_Freq, table_medium_base1$Correct_Freq, table_medium_base2$Correct_Freq, table_medium_base3$Correct_Freq, table_max_base$Correct_Freq, table_min_Hh$Correct_Freq, table_medium_Hh1$Correct_Freq, table_medium_Hh2$Correct_Freq, table_medium_Hh3$Correct_Freq, table_max_Hh$Correct_Freq, table_min_Hl$Correct_Freq, table_medium_Hl1$Correct_Freq, table_medium_Hl2$Correct_Freq, table_medium_Hl3$Correct_Freq, table_max_Hl$Correct_Freq)
+
+colnames(table_freq) <- c("Subject", "Basic_min","Basic_medium1", "Basic_medium2", "Basic_medium3", "Basic_max", "Hh_min","Hh_medium1", "Hh_medium2", "Hh_medium3", "Hh_max", "Hl_min", "Hl_medium1","Hl_medium2", "Hl_medium3", "Hl_max"
+                         )
+table_freq <- as.data.frame(table_freq)
+
+
+```
+
+Accuracy - according to conditions 
+
+```{r}
+#HL_cond <- cond_s[ which(cond_s$TrialType == "HL") , ]
+#LH_cond <- cond_s[ which(cond_s$TrialType == "LH") , ]
+
+#HH_LL_cond <- cond_s[ which(cond_s$TrialType == "HH" | cond_s$TrialType == "LL") , ]
+
+library(plotrix)
+
+table_acc <- mydata %>%
+ group_by(Subject, TrialType) %>% 
+   summarise(Correct = mean(Correct))
+  
+#Group by subject
+table_basic <- base_cond %>%
+    group_by(Subject) %>% 
+    #summarise_each(funs(mean,std.error))
+    summarise(Correct = mean(Correct))
+
+table_ebbin <- cond_s %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+table_Hh_Hl <- Hh_Hl %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+table_Hh <- Hh_cond  %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+table_Hl <- Hl_cond  %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+table_hh <- hh_cond  %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+table_ll <- ll_cond  %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+all_table <- cbind(table_basic$Subject, table_basic$Correct,table_Hh_Hl$Correct, table_Hh$Correct, table_Hl$Correct, table_hh$Correct, table_ll$Correct, table_ebbin$Correct)
+
+colnames(all_table) <- c("Subject", "Basic_mean", "Hh+Hl", "Hh_mean", "Hl_mean", "hh_mean", "ll_mean", "ebbin_mean" 
+                         )
+all_table <- as.data.frame(all_table)
+
+#save as an excel file
+write.csv(all_table, "value_acc_pilotV3_all.csv")
+
+#Bar plot
+mean_base <- mean(all_table$Basic_mean)
+mean_ebbin <- mean(all_table$`Hh+Hl`)
+
+means = c(mean_base, mean_ebbin) 
+
+cols <- c("gray", "darkred")
+barplot(means,
+space=2,
+col = cols)
+
+all_table$percept <- c(0.6375,
+0.6875,
+0.7375,
+0.7875,
+0.5875,
+0.725,
+0.55,
+0.8,
+0.625,
+0.575,
+0.6375,
+0.65,
+0.825,
+0.4625,
+0.575,
+0.85,
+0.4875
+)
+
+
+#cor.test(all_table$ebbin_mean, all_table$percept)
+#plot(all_table$ebbin_mean, all_table$percept)
+```
+
+Base condition
+```{r}
+abs_D = abs(mydata$D_Ranks)
+
+#Correct_base <- base_cond$LowContextHighItem
+Correct_base <- base_cond$Correct
+
+mymodel = glmer(Correct_base ~ abs_D + (1 | Subject),
+                data = base_cond,
+                family = binomial)
+summary(mymodel)
+
+mean_base <- mean(Correct_base)
+#mean_base <- mean(base_cond$Correct)
+
+
+#########################################################################################################
+#Propensity to choose the bigger circle as a function of the radius difference (left-right) in abs value
+#ii = 102
+for (ii in 107:max(mydata$Subject)){
+ temp_data <- base_cond[base_cond$Subject==ii,]
+ 
+abs_D = abs(temp_data$D_Value)
+Correct_base <- temp_data$Correct
+ 
+fit1 = glm(Correct_base ~ abs_D , data=temp_data, family=binomial)
+newdat <- data.frame(abs_D =seq(min(abs_D), max(abs_D ),len=100))
+newdat$Correct_base = predict(fit1, newdata=newdat, type="response")
+plot(Correct_base~abs_D , data=temp_data, col="red4")
+lines(Correct_base~abs_D , newdat, col="green4", lwd=2)
+
+#threshold calculation
+intercept_base =  fit1$coefficients[1]
+slope_base = fit1$coefficients[2]
+
+threshold_base <- -(intercept_base/slope_base)
+print(threshold_base)
+}
+
+#########################################################################################################
+#ii = 104
+threshold_base_table <- NULL
+j <- 1
+
+for (ii in unique(mydata$Subject)){
+ temp_data <- base_cond[base_cond$Subject==ii,]
+
+
+#Propensity to choose "left" as a function of the radius difference (left-right)
+cond <- temp_data
+Choice_base <- cond$Click
+choice_left <- ifelse(Choice_base == 1, 1, 0)
+cond <- cbind(cond, choice_left)
+D <- cond$D_Value
+
+fit = glm(choice_left ~ D, data=cond, family=binomial)
+newdat <- data.frame(D=seq(min(D), max(D),len=100))
+newdat$choice_left = predict(fit, newdata=newdat, type="response")
+plot(choice_left~D, data=cond, col="red4")
+lines(choice_left~D, newdat, col="green4", lwd=2)
+
+#threshold calculation
+intercept_base =  fit$coefficients[1]
+slope_base = fit$coefficients[2]
+
+threshold_base <- -(intercept_base/slope_base)
+
+print(threshold_base)
+threshold_base_table[j] <- threshold_base
+j <- j+1
+}
+
+threshold_base_table <- as.data.frame(threshold_base_table)
+
+#RT
+
+RT_model = lmer(ChoiceRT ~ abs_D + TrialType + (1|Subject),
+                     data=mydata)
+summary(RT_model)
+plot(abs_D , mydata$ChoiceRT)
+
+```
+
+Thresholds/slopes of all conditions 
+```{r}
+#Propensity to choose the left circle as a function of the radius difference (left-right)
+
+#list of all conditions
+cond_all <- list(base_cond,Hh_cond,Hl_cond,hh_cond,ll_cond,Hh_Hl)
+
+threshold_table <- matrix(, nrow = length(unique(mydata$Subject)), ncol = length(cond_all))
+#indicate namuber of row and column
+j <- 1 #row
+r <- 1 #column
+
+#ii <- 4
+#loop over conditions
+for (ii in 1:length(cond_all)){
+choice_left <- ifelse(cond_all[[ii]][["Click"]] == 1, 1, 0)
+cond_f <- cbind(cond_all[[ii]], choice_left)
+
+#loop over subjects inside a condition
+for (ii in unique(cond_f$Subject)){
+ temp_data <- cond_f[cond_f$Subject==ii,]
+ 
+ D <- temp_data$D_Value
+
+fit = glm(choice_left ~ D, data=temp_data, family=binomial)
+newdat <- data.frame(D=seq(min(D), max(D),len=100))
+newdat$choice_left = predict(fit, newdata=newdat, type="response")
+plot(choice_left~D, data=temp_data, col="red4")
+lines(choice_left~D, newdat, col="green4", lwd=2)
+
+#threshold calculation
+intercept_ebbin =  fit$coefficients[1]
+slope_ebbin = fit$coefficients[2]
+
+threshold_ebbin <- -(intercept_ebbin/slope_ebbin)
+
+#print(threshold_ebbin)
+#add each subject's threshold to the matrix
+threshold_table[j,r] <- slope_ebbin
+j <- j+1
+}
+#When moving to a new condition, move to the next column and start a new counting of the rows
+r <- r+1
+j <- 1
+}
+
+#convert the matrix to a data frame
+threshold_table <- as.data.frame(threshold_table)
+threshold_table <- cbind(unique(mydata$Subject),threshold_table)
+colnames(threshold_table) <- c("Subject", "Basic","Hh", "Hl", "hh", "ll","Hh_Hl") 
+
+#save as csv                        
+write.csv(threshold_table, "value_slope_pilotV3_all.csv")
+
+#ttest for medium bins
+y1 <- threshold_table$Hh
+y2 <- threshold_table$Hl
+t.test(y1,y2,paired=TRUE) # where y1 & y2 are numeric
+
+#effect size
+cohen.d(y1 ,y2)
+
+```
+
+GLM separetly for each condition + correlation with perception
+```{r}
+threshold_ebbin_table <- NULL
+j <- 1
+cond_all <- Hh_Hl
+
+for (ii in unique(mydata$Subject)){
+ temp_data <- cond_all[cond_all$Subject==ii,]
+
+
+#Propensity to choose "left" as a function of the radius difference (left-right)
+cond <- temp_data
+Choice_base <- cond$Click
+choice_left <- ifelse(Choice_base == 1, 1, 0)
+cond <- cbind(cond, choice_left)
+D <- cond$D_Value 
+
+fit = glm(choice_left ~ D, data=cond, family=binomial)
+newdat <- data.frame(D=seq(min(D), max(D),len=100))
+newdat$choice_left = predict(fit, newdata=newdat, type="response")
+plot(choice_left~D, data=cond, col="red4")
+lines(choice_left~D, newdat, col="green4", lwd=2)
+
+#threshold calculation
+intercept_ebbin =  fit$coefficients[1]
+slope_ebbin = fit$coefficients[2]
+
+threshold_ebbin <- -(intercept_ebbin/slope_ebbin)
+
+print(threshold_ebbin)
+threshold_ebbin_table[j] <- slope_ebbin
+j <- j+1
+}
+
+#threshold_table <- cbind(threshold_table, threshold_ebbin_table)
+
+#correlation between hh_Hl slopes and percept slopes
+#mydata$percept_threshold <- -(mydata$percept_threshold_rep)
+
+cor_data <- cbind(unique(mydata$Subject), threshold_ebbin_table, unique(mydata$percept_slope_rep))
+cor_data <- as.data.frame(cor_data)
+colnames(cor_data) <- c("SID", "value", "percept")
+
+cor.test(cor_data$value, cor_data$percept)
+
+#plot the connection between gestalt thr and coose_T
+g_sub <- ggplot(cor_data , aes(x=value, y=percept)) + 
+  geom_point(size= 2)+
+  geom_smooth(method=lm, size = 2, col = "#FF3232")+
+  #scale_x_continuous(limits=c(2.5, 12)) +
+  #scale_y_continuous(limits=c(0.4, 0.7))+
+  labs(x="Hh_Hl thresholds", y = "Perception thresholds")
+
+g_sub + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=22, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=22, angle=0))
+ # axis.text=element_text(color="black", 
+  #                           size=22, angle=0),
+  #axis.title=element_text(color="black", 
+   #                          size=22, angle=0))
+
+#write.csv(threshold_table, "value_threshold.csv")
+```
+
+Ebbinghaus condition - different analysis
+```{r}
+#GLM model
+abs_D = abs(LH_cond$D_Ranks)
+
+Correct_ebbin <- LH_cond$Correct
+
+mymodel = glmer(Correct_ebbin ~ abs_D + (1 | Subject),
+                data = LH_cond,
+                family = binomial)
+summary(mymodel)
+
+#Propensity to choose the bigger circle as a function of the radius difference (left-right) in abs value
+#ii = 102
+for (ii in 107:max(mydata$Subject)){
+ temp_data <- HL_cond[HL_cond$Subject==ii,]
+ 
+cond_f <- temp_data
+abs_D = abs(cond_f$D_Value)
+Correct <- cond_f$Correct
+
+
+fit2 = glm(Correct ~ abs_D , data=cond_f, family=binomial)
+newdat <- data.frame(abs_D =seq(min(abs_D), max(abs_D ),len=50))
+newdat$Correct = predict(fit2, newdata=newdat, type="response")
+plot(Correct~abs_D , data=cond_f, col="red4")
+lines(Correct~abs_D , newdat, col="green4", lwd=2)
+
+intercept_ebbin =  fit2$coefficients[1]
+slope_ebbin = fit2$coefficients[2]
+
+threshold_ebbin <- (-intercept_ebbin)/slope_ebbin
+print(threshold_ebbin)
+
+}
+
+#Propensity to choose the left circle as a function of the radius difference (left-right) 
+threshold_ebbin_table <- NULL
+j <- 1
+cond_all <- Hh_Hl
+  
+for (ii in unique(mydata$Subject)){
+ temp_data <- cond_all[cond_all$Subject==ii,]
+
+
+#Propensity to choose "left" as a function of the radius difference (left-right)
+cond <- temp_data
+Choice_base <- cond$Click
+choice_left <- ifelse(Choice_base == 1, 1, 0)
+cond <- cbind(cond, choice_left)
+
+fit = glm(choice_left ~ D_Ranks, data=cond, family=binomial)
+newdat <- data.frame(D_Ranks=seq(min(cond$D_Ranks), max(cond$D_Ranks),len=100))
+newdat$choice_left = predict(fit, newdata=newdat, type="response")
+plot(choice_left~D_Ranks, data=cond, col="red4")
+lines(choice_left~D_Ranks, newdat, col="green4", lwd=2)
+
+#threshold calculation
+intercept_ebbin =  fit$coefficients[1]
+slope_ebbin = fit$coefficients[2]
+
+threshold_ebbin <- -(intercept_ebbin/slope_ebbin)
+
+print(threshold_ebbin)
+threshold_ebbin_table[j] <- threshold_ebbin
+j <- j+1
+}
+
+threshold_table <- cbind(threshold_base_table, threshold_ebbin_table)
+
+write.csv(threshold_table, "value_threshold.csv")
+
+
+#Divide into BigT_HighCon and BigT_LowCon conditions:
+##Frequency of choosing the bigger target with low circles (big T on low con vs. big T on high con)
+
+HL_cond <- ebbin_cond[ which(ebbin_cond$TrialType == "HL" | ebbin_cond$TrialType == "LH") , ]
+HH_LL_cond <- ebbin_cond[ which(ebbin_cond$TrialType == "HH" | ebbin_cond$TrialType == "LL") , ]
+
+HH_cond <- ebbin_cond[ which(ebbin_cond$TrialType == "HH") , ]
+LL_cond <- ebbin_cond[ which(ebbin_cond$TrialType == "LL" ) , ]
+
+BL_cond <- HL_cond[ which(HL_cond$LowContextHighItem == 1) , ]
+BH_cond <- HL_cond[ which(HL_cond$HighContextHighItem == 1) , ] #harder
+
+#low-circles location
+low_loc <- ifelse(HL_cond$LeftContext == "Low", 1, 2) #1 = left
+HL_cond <- cbind(HL_cond, low_loc)
+
+#Does the bigger target was on the left or right?
+big_loc <- ifelse(HL_cond$D_Ranks > 0 , 1, 2) #1=left
+HL_cond <- cbind(HL_cond, big_loc)
+
+#Does the bigger target was where the low-context was?
+BigT_LowCon <-  ifelse(HL_cond$big_loc == HL_cond$low_loc, 1, 0)
+HL_cond <- cbind(HL_cond, BigT_LowCon)
+
+BL_cond <- HL_cond[ which(HL_cond$BigT_LowCon == 1) , ]
+BH_cond <- HL_cond[ which(HL_cond$BigT_LowCon == 0) , ] #harder
+
+
+abs_D = abs(BH_cond$D_Ranks)
+
+fit2 = glm(Correct ~ abs_D , data=BH_cond, family=binomial)
+newdat <- data.frame(abs_D =seq(min(abs_D), max(abs_D ),len=50))
+newdat$Correct = predict(fit2, newdata=newdat, type="response")
+plot(Correct~abs_D , data=BH_cond, col="red4")
+lines(Correct~abs_D , newdat, col="green4", lwd=2)
+
+
+#Propensity to choose the target which is surrounded by low-circles as a function of the rank difference (low-context target - large-context target)
+HL_cond <- ebbin_cond[ which(ebbin_cond$TrialType == "HL" | ebbin_cond$TrialType == "LH") , ]
+HH_LL_cond <- ebbin_cond[ which(ebbin_cond$TrialType == "HH" | ebbin_cond$TrialType == "LL") , ]
+LL_cond <- ebbin_cond[ which(ebbin_cond$TrialType == "LL") , ]
+
+low_loc <- ifelse(HL_cond$LeftContext == "Low", 1, 2) #low-circles location
+HL_cond  <- cbind(HL_cond , low_loc)
+
+
+choice_low_con <- ifelse(HL_cond$Click == HL_cond$low_loc, 1, 0) #y (choocing the T which was sorrounded by low-context)
+HL_cond <- cbind(HL_cond, choice_low_con)
+
+D_low_high <- NULL #x
+
+for (i in 1:length(choice_low_con)){
+  if(HL_cond$low_loc[i] == 1)#the low circles were on the left side 
+  {D_low_high[i] <- HL_cond$D_Ranks[i]} 
+  else{D_low_high[i] <- -HL_cond$D_Ranks[i]}
+}
+
+HL_cond <- cbind(HL_cond, D_low_high)
+
+
+fit2 = glm(choice_low_con ~ D_low_high, data=HL_cond, family=binomial)
+newdat <- data.frame(D_low_high=seq(min(HL_cond$D_low_high), max(HL_cond$D_low_high),len=100))
+newdat$choice_low_con = predict(fit2, newdata=newdat, type="response")
+plot(choice_low_con~D_low_high, data=HL_cond, col="red4")
+lines(choice_low_con~D_low_high, newdat, col="green4", lwd=2)
+
+##########################################################################################################
+#ii = 101
+threshold_ebbin_table <- NULL
+j <- 1
+temp_data <- NULL
+
+for (ii in unique(Hh_Hl$Subject)){
+ temp_data <- Hh_Hl[Hh_Hl$Subject==ii,]
+ 
+#Transposition: change the rows which are "High" in LeftContext by: changing the D_Ranks sign and changing the direction of choice
+
+trans_D <- NULL
+trans_choice <- NULL
+cond <- temp_data
+D <- cond$D_Value
+Choice <- cond$Click
+
+
+low_loc <- ifelse(cond$LeftContext == "Low", 1, 0) #low-circles location
+cond  <- cbind(cond , low_loc)
+
+for (ii in 1:length(cond$low_loc)){
+  if(cond$low_loc[ii] == 0){
+    trans_D[ii]<- -D[ii]
+    trans_choice[ii] <- ifelse(Choice[ii]==1,2,1)
+  }
+  else{
+    trans_D[ii] <- D[ii]
+    trans_choice[ii] <- Choice[ii]
+  }
+}
+
+trans_choice <- ifelse(trans_choice==2,0,1)
+
+cond <- cbind(cond, trans_D, trans_choice)
+
+fit3 = glm(trans_choice ~ trans_D, data=cond, family=binomial)
+newdat <- data.frame(trans_D=seq(min(cond$trans_D), max(cond$trans_D),len=100))
+newdat$trans_choice = predict(fit3, newdata=newdat, type="response")
+plot(trans_choice ~ trans_D, data=cond, col="red4")
+lines(trans_choice ~ trans_D, newdat, col="green4", lwd=2)
+
+
+#threshold calculation
+intercept_ebbin =  fit3$coefficients[1]
+slope_ebbin = fit3$coefficients[2]
+
+threshold_ebbin <- (-intercept_ebbin)/slope_ebbin
+
+print(threshold_ebbin )
+
+threshold_ebbin_table[j] <- threshold_ebbin 
+j <- j+1
+}
+
+threshold_Hh_Hl <- as.data.frame(threshold_ebbin_table)
+
+#threshold_table <- cbind(threshold_base_table, threshold_ebbin_table)
+
+write.csv(threshold_Hh_Hl, "value_threshold_values_transposed_pilotV3.csv")
+
+#################################################################################################################
+##Accuracy
+mean_BL <- mean(BL_cond$Correct)
+mean_BH <- mean(BH_cond$Correct)
+mean_HH_LL <- mean(HH_LL_cond$Correct)
+mean_HH <- mean(HH_cond$Correct)
+mean_LL <- mean(LL_cond$Correct)
+
+mean_HL <- mean(HL_cond$Correct)
+
+mean_ebbin <- mean(ebbin_cond$Correct)
+
+#################################################################################################################
+##Validity of parameters
+HL_cond_left <- HL_cond[ which(HL_cond$LeftContext == "High") , ]
+HL_cond_right <- HL_cond[ which(HL_cond$LeftContext == "Low") , ]
+
+LH_cond_left <- LH_cond[ which(LH_cond$LeftContext == "High") , ]
+LH_cond_right <- LH_cond[ which(LH_cond$LeftContext == "Low") , ]
+
+HH_LL_cond_left <- HH_LL_cond[ which(LH_cond$LeftContext == "High") , ]
+HH_LL_cond_right <- HH_LL_cond[ which(LH_cond$LeftContext == "Low") , ]
+
+
+#################################################################################################################
+#RT
+abs_D = abs(base_cond$D_Ranks)
+
+RT_model = lmer(ChoiceRT ~ abs_D + (1 | Subject),
+                     data=base_cond)
+summary(RT_model)
+plot(abs_D , base_cond$ChoiceRT)
+
+```
+
+GLM for transposed data - basic vs. Hh+Hl condition
+```{r}
+##Propensity to choose "left" (transposition: left represents the target which is surrounded by small-circles) as a function of the radius difference (small-context target - large-context target = left-right)
+
+#ii = 101
+threshold_ebbin_table <- NULL
+j <- 1
+temp_data <- NULL
+
+for (ii in unique(Hh_Hl$Subject)){
+ temp_data <- Hh_Hl[Hh_Hl$Subject==ii,]
+ 
+#Transposition: change the rows which are "High" in LeftContext by: changing the D_Ranks sign and changing the direction of choice
+
+trans_D <- NULL
+trans_choice <- NULL
+cond <- temp_data
+D <- cond$D_Value
+Choice <- cond$Click
+
+
+low_loc <- ifelse(cond$LeftContext == "Low", 1, 0) #low-circles location
+cond  <- cbind(cond , low_loc)
+
+for (ii in 1:length(cond$low_loc)){
+  if(cond$low_loc[ii] == 0){
+    trans_D[ii]<- -D[ii]
+    trans_choice[ii] <- ifelse(Choice[ii]==1,2,1)
+  }
+  else{
+    trans_D[ii] <- D[ii]
+    trans_choice[ii] <- Choice[ii]
+  }
+}
+
+trans_choice <- ifelse(trans_choice==2,0,1)
+
+cond <- cbind(cond, trans_D, trans_choice)
+
+fit3 = glm(trans_choice ~ trans_D, data=cond, family=binomial)
+newdat <- data.frame(trans_D=seq(min(cond$trans_D), max(cond$trans_D),len=100))
+newdat$trans_choice = predict(fit3, newdata=newdat, type="response")
+plot(trans_choice ~ trans_D, data=cond, col="red4")
+lines(trans_choice ~ trans_D, newdat, col="green4", lwd=2)
+
+
+#threshold calculation
+intercept_ebbin =  fit3$coefficients[1]
+slope_ebbin = fit3$coefficients[2]
+
+threshold_ebbin <- (-intercept_ebbin)/slope_ebbin
+
+print(threshold_ebbin )
+
+threshold_ebbin_table[j] <- slope_ebbin 
+j <- j+1
+}
+
+threshold_Hh_Hl <- as.data.frame(threshold_ebbin_table)
+
+#threshold_table <- cbind(threshold_base_table, threshold_ebbin_table)
+
+#write.csv(threshold_table, "value_threshold.csv")
+
+```
+
+GLM which includes all subjects (https://www.statmethods.net/advstats/glm.html)
+```{r}
+#GLM model which includes all subjects
+library(multcomp)
+library(languageR)
+#library(languageRv1.4.1)
+library(RColorBrewer)
+
+#list of all conditions
+#df_list <- list(base_cond,Hh_cond,Hl_cond,hh_cond,ll_cond)
+df_list <- list(base_cond,Hh_cond,Hl_cond)
+#df_list <- list(base_cond,ebbin_cond)
+#df_list <- list(Hh_cond,Hl_cond)
+
+#vector of colors (a color for each condition)
+color_vec <- brewer.pal(n = length(df_list), name = "Set1")
+
+
+#ii = 4
+for (ii in 1:length(df_list)){
+choice_left <- ifelse(df_list[[ii]][["Click"]] == 1, 1, 0)
+cond_f <- cbind(df_list[[ii]], choice_left)
+D <- cond_f$D_Value
+dependent_var <- cond_f$choice_left
+
+
+model = glmer(dependent_var ~ D + (1 | Subject),
+                data = cond_f,
+                family = binomial(link="logit"))
+          
+summary(model)
+
+#Added in order to save in a higher resolution
+#tiff("test.tiff", units="in",width=8, height=5, res=300)
+
+plotLMER.fnc(model,ylimit=0:1,lockYlim=TRUE,xlim =  range(-20:20),
+             linecolor=color_vec[ii],addToExistingPlot = TRUE,
+lwd=4,xlabel="D_Values (left - right)",
+ylabel="Probability of choosing the Left product")
+
+#addMCMCci.fnc(mcmcM, model, m, fun, pred, predname = NA, factor = FALSE)
+
+cond_f <- NULL
+par(new=TRUE)
+}
+
+#legend("bottomright", c("base_cond","Hh_cond","Hl_cond","hh_cond","ll_cond"), pch=15, 
+legend("bottomright", c("Basic","High Target_High context","High Target_Low context"), pch=15, #legend for 2 conditions
+col=brewer.pal(n = length(df_list), name = "Set1"),title="Condition")
+
+#Add line in prob = 0.5
+abline(h=0.5, col="black",lty=2, size = 2) 
+
+#par(new=FALSE)
+#display.brewer.pal(n = 5, name = 'Set1')
+# insert ggplot code
+#dev.off() 
+
+#tmp <- as.data.frame(confint(glht(model))$confint)
+#tmp$Comparison <- rownames(tmp)
+#ggplot(tmp, aes(x = Comparison, y = Estimate, ymin = lwr, ymax = upr)) +
+ # geom_errorbar() + geom_point()
+#library(ggeffects)
+#model4a_p1 <-ggpredict(model,terms=c("D_Value","choice_left"))
+#ggplot(model4a_p1, aes(x = x, y = predicted, colour = group)) +
+ # geom_line(size = 1)+
+  #theme_classic()+
+  #scale_color_manual(values=c("#cb4154","#17806d"))
+  #geom_ribbon(aes(ymin = conf.low, ymax = conf.high),linetype = 0,alpha = 0.1)
+
+
+```
+
+GLM for each subject - basic vs. Hh+Hl
+```{r}
+#GLM model which includes all subjects
+library(multcomp)
+library(languageR)
+library(RColorBrewer)
+
+#list of all conditions
+#df_list <- list(base_cond,Hh_cond,Hl_cond,hh_cond,ll_cond)
+#df_list <- list(base_cond,ebbin_cond)
+df_list <- list(base_cond,Hh_Hl)
+
+#vector of colors (a color for each condition)
+color_vec <- brewer.pal(n = length(df_list), name = "Set1")
+
+for(ss in unique(mydata$Subject)){
+  #loop over data sets of conditions
+for (ii in 1:length(df_list)){
+  temp_data <- df_list[[ii]][df_list[[ii]][["Subject"]]==ss,]
+
+#ii = 1
+
+  
+if(ii == 1){
+choice_left <- ifelse(df_list[[ii]][["Click"]] == 1, 1, 0)
+cond_f <- cbind(df_list[[ii]], choice_left)
+
+fit = glm(choice_left ~ D_Ranks, data=temp_data, family=binomial)
+newdat <- data.frame(D_Ranks=seq(min(temp_data$D_Ranks), max(temp_data600$D_Ranks),len=100))
+newdat$choice_left = predict(fit, newdata=newdat, type="response")
+plot(choice_left~D_Ranks, data=temp_data, col="red4",xlim = c(-20,20))
+lines(choice_left~D_Ranks, newdat, col=color_vec[bb], lwd=2)
+#Add line in prob = 0.5
+abline(h=0.5, col="black",lty=2, size = 2) 
+
+par(new=TRUE)
+}
+
+if(ii==2){
+  #Transposition: change the rows which are "High" in LeftContext by: changing the D_Ranks sign and changing the direction of choice
+
+trans_D <- NULL
+trans_choice <- NULL
+cond <- df_list[[ii]]
+D <- cond$D_Ranks
+Choice <- cond$Click
+
+low_loc <- ifelse(cond$LeftContext == "Low", 1, 0) #low-circles location
+cond  <- cbind(cond , low_loc)
+
+for (bb in 1:length(cond$low_loc)){
+  if(cond$low_loc[bb] == 0){
+    trans_D[bb]<- -D[bb]
+    trans_choice[bb] <- ifelse(Choice[bb]==1,2,1)
+  }
+  else{
+    trans_D[bb] <- D[bb]
+    trans_choice[bb] <- Choice[bb]
+  }
+}
+
+trans_choice <- ifelse(trans_choice==2,0,1)
+
+cond <- cbind(cond, trans_D, trans_choice)
+
+model = glmer(trans_choice ~ trans_D + (1 | Subject),
+                data = cond,
+                family = binomial(link="logit"))
+          
+summary(model)
+}
+
+
+#Added in order to save in a higher resolution
+#tiff("test.tiff", units="in",width=8, height=5, res=300)
+
+plotLMER.fnc(model,ylimit=0:1,lockYlim=TRUE,xlim =  range(-20:20),
+             linecolor=color_vec[ii],addToExistingPlot = TRUE,
+lwd=4,xlabel="D_ranks (left-right)",
+ylabel="Probability of choosing left")
+
+cond_f <- NULL
+par(new=TRUE)
+}
+}
+#legend("bottomright", c("base_cond","Hh_cond","Hl_cond","hh_cond","ll_cond"), pch=15, 
+legend("bottomright", c("basic","Hh_Hl"), pch=15, #legend for 2 conditions
+col=brewer.pal(n = length(df_list), name = "Set1"),title="Condition")
+
+#Add line in prob = 0.5
+abline(h=0.5, col="black",lty=2, size = 2) 
+
+#par(new=FALSE)
+#display.brewer.pal(n = 5, name = 'Set1')
+# insert ggplot code
+#dev.off() 
+
+#tmp <- as.data.frame(confint(glht(model))$confint)
+#tmp$Comparison <- rownames(tmp)
+#ggplot(tmp, aes(x = Comparison, y = Estimate, ymin = lwr, ymax = upr)) +
+ # geom_errorbar() + geom_point()
+
+
+```
+
+GLM which includes all subjects - basic vs. Hh+Hl
+```{r}
+#GLM model which includes all subjects
+library(multcomp)
+library(languageR)
+library(RColorBrewer)
+
+#list of all conditions
+#df_list <- list(base_cond,Hh_cond,Hl_cond,hh_cond,ll_cond)
+#df_list <- list(base_cond,ebbin_cond)
+df_list <- list(base_cond,Hh_Hl)
+
+#vector of colors (a color for each condition)
+color_vec <- brewer.pal(n = length(df_list), name = "Set1")
+
+
+#ii = 1
+#loop over data sets of conditions
+for (ii in 1:length(df_list)){
+  
+if(ii == 1){
+choice_left <- ifelse(df_list[[ii]][["Click"]] == 1, 1, 0)
+cond_f <- cbind(df_list[[ii]], choice_left)
+
+model = glmer(choice_left ~ D_Value + (1 | Subject),
+                data = cond_f,
+                family = binomial(link="logit"))
+          
+summary(model)
+}
+
+if(ii==2){
+  #Transposition: change the rows which are "High" in LeftContext by: changing the D_Ranks sign and changing the direction of choice
+
+trans_D <- NULL
+trans_choice <- NULL
+cond <- df_list[[ii]]
+D <- cond$D_Value
+Choice <- cond$Click
+
+low_loc <- ifelse(cond$LeftContext == "Low", 1, 0) #low-circles location
+cond  <- cbind(cond , low_loc)
+
+for (bb in 1:length(cond$low_loc)){
+  if(cond$low_loc[bb] == 0){
+    trans_D[bb]<- -D[bb]
+    trans_choice[bb] <- ifelse(Choice[bb]==1,2,1)
+  }
+  else{
+    trans_D[bb] <- D[bb]
+    trans_choice[bb] <- Choice[bb]
+  }
+}
+
+trans_choice <- ifelse(trans_choice==2,0,1)
+
+cond <- cbind(cond, trans_D, trans_choice)
+
+model = glmer(trans_choice ~ trans_D + (1 | Subject),
+                data = cond,
+                family = binomial(link="logit"))
+          
+summary(model)
+}
+
+
+#Added in order to save in a higher resolution
+#tiff("test.tiff", units="in",width=8, height=5, res=300)
+
+plotLMER.fnc(model,ylimit=0:1,lockYlim=TRUE,xlim =  range(-20:20),
+             linecolor=color_vec[ii],addToExistingPlot = TRUE,
+lwd=4,xlabel="D_value (left-right)",
+ylabel="Probability of choosing left")
+
+cond_f <- NULL
+par(new=TRUE)
+}
+
+#legend("bottomright", c("base_cond","Hh_cond","Hl_cond","hh_cond","ll_cond"), pch=15, 
+legend("bottomright", c("Basic","Ebbinghaus"), pch=15, #legend for 2 conditions
+col=brewer.pal(n = length(df_list), name = "Set1"),title="Condition")
+
+#Add line in prob = 0.5
+abline(h=0.5, col="black",lty=2, size = 2) 
+
+#par(new=FALSE)
+#display.brewer.pal(n = 5, name = 'Set1')
+# insert ggplot code
+#dev.off() 
+
+#tmp <- as.data.frame(confint(glht(model))$confint)
+#tmp$Comparison <- rownames(tmp)
+#ggplot(tmp, aes(x = Comparison, y = Estimate, ymin = lwr, ymax = upr)) +
+ # geom_errorbar() + geom_point()
+
+unique(mydata$Subject)
+```
+
+Each subject- show sigmoids for all conditions
+```{r}
+#Propensity to choose the left circle as a function of the radius difference (left-right)
+library(multcomp)
+library(languageR)
+library(RColorBrewer)
+
+#list of all conditions
+trial_type <- c("Choice","HL", "LH", "HH", "LL")
+#trial_type <- c("Choice","HL", "LH")
+
+coef_table <- matrix(nrow = length(trial_type), ncol = length(unique(mydata$Subject)))
+#indicate namuber of row and column
+j <- 1 #row
+r <- 1 #column
+
+#vector of colors (a color for each condition)
+color_vec <- brewer.pal(n = length(trial_type), name = "Set1")
+
+cond_f <- mydata
+
+#ii <- 113
+#loop over subjects
+for (ii in unique(cond_f$Subject)){
+  temp_data <- cond_f[cond_f$Subject==ii,]
+
+  #bb <- 1  
+#loop over conditions inside each subject
+for (bb in 1:length(trial_type)){
+  temp_data2 <- temp_data[temp_data$TrialType == trial_type[bb],]
+choice_left <- ifelse(temp_data2$Click == 1, 1, 0)
+ temp_data2 <- cbind( temp_data2, choice_left)
+
+ 
+fit = glm(choice_left ~ D_Ranks, data=temp_data2, family=binomial)
+newdat <- data.frame(D_Ranks=seq(min(temp_data2$D_Ranks), max(temp_data2$D_Ranks),len=100))
+newdat$choice_left = predict(fit, newdata=newdat, type="response")
+plot(choice_left~D_Ranks, data=temp_data2, col="red4",xlim = c(-20,20))
+lines(choice_left~D_Ranks, newdat, col=color_vec[bb], lwd=2)
+#Add line in prob = 0.5
+abline(h=0.5, col="black",lty=2, size = 2)
+abline(v=0,col="black",lty=2, size = 2)
+
+slope_sub <- fit[["coefficients"]][["D_Ranks"]]
+#fit$coefficients[2]
+
+
+#print(threshold_ebbin)
+#add each subject's threshold to the matrix
+coef_table[j,r] <- slope_sub
+j <- j+1
+  
+par(new=TRUE)
+}
+
+#When moving to a new subject, move to the next column and start a new counting of the rows
+r <- r+1
+j <- 1
+
+legend("bottomright", c("base_cond","Hh_cond","Hl_cond","hh_cond","ll_cond"), pch=15, #legend for 2 conditions
+#legend("bottomright", c("base_cond","ebbin_cond"), pch=15, #legend for 2 conditions
+col=brewer.pal(n = length(trial_type), name = "Set1"),title="Condition")
+
+}
+
+unique(mydata$Subject)
+
+#create table of coefs for each condition
+coef_table <- t(coef_table)
+
+coef_table <- as.data.frame(coef_table)
+coef_table <- cbind(unique(mydata$Subject),coef_table)
+colnames(coef_table) <- c("Subject", "Basic","Hh", "Hl", "hh", "ll") 
+
+#plot mean of coefs with individial coefs
+##create table for plot
+base <- rep(0, length(unique(mydata$Subject)))
+Hh <- rep(1, length(unique(mydata$Subject)))
+Hl <- rep(2, length(unique(mydata$Subject)))
+hh <- rep(3, length(unique(mydata$Subject)))
+ll <- rep(4, length(unique(mydata$Subject)))
+
+base1<- cbind(base,coef_table$Basic)
+Hh1 <- cbind(Hh,coef_table$Hh)
+Hl1 <- cbind(Hl,coef_table$Hl)
+hh1 <- cbind(hh,coef_table$hh)
+ll1 <- cbind(ll,coef_table$ll)
+
+table_coef1 <- rbind(base1, Hh1, Hl1, hh1, ll1)
+table_coef1 <- as.data.frame(table_coef1)
+colnames(table_coef1) <- c("cond", "coef")
+table_coef1$cond <- as.factor(table_coef1$cond)
+
+describe(table_coef1$coef)
+
+##draw plot
+#Bar plot
+fill_col = brewer.pal(n = length(trial_type), name = "Set1")
+
+gd <- table_coef1 %>% 
+        group_by(cond) %>% 
+        summarise(coef = mean(coef))
+
+p <- ggplot(table_coef1, aes(x = cond, y = coef, color = cond, fill = cond)) +
+  geom_point(size = 2) +
+  geom_bar(data = gd, stat = "identity", alpha = .5, fill =  fill_col ) +
+  scale_y_continuous(limits=c(-0.5, 0.5))+
+  scale_color_manual(values=fill_col)
+
+p + 
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black", size = 1),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0)
+  #axis.text=element_text(color="black", 
+                            # size=20, angle=0),
+  #axis.title=element_text(color="black", 
+                             #size=20, angle=0)
+)
+
+```
+
+GLM analyses
+Taken from: https://drsimonj.svbtle.com/plotting-individual-observations-and-group-means-with-ggplot2
+---------------------
+```{r}
+#GLM
+cond_f <- mydata
+choice_left <- ifelse(cond_f$Click == 1, 1, 0)
+cond_f <- cbind(cond_f, choice_left)
+abs_D <- abs(cond_f$D_Value)
+#cond_f$diff_high_low <- cond_f$high_context_value - cond_f$low_context_value
+
+mymodel = glmer(Correct ~ abs_D + TrialType + diff_high_low + (1 | Subject),
+                data = cond_f,
+                family = binomial)
+summary(mymodel)
+
+mymodel = glmer(Correct ~ abs_D + TrialType + (1 | Subject),
+                data = cond_f,
+                family = binomial)
+summary(mymodel)
+
+mymodel = glmer(choice_left ~ D_Ranks + TrialType + (1 | Subject),
+                data = cond_f,
+                family = binomial)
+summary(mymodel)
+
+mymodel = glmer(Correct ~ abs_D_Ranks + cond_type + (1 | Subject),
+                data = cond_f,
+                family = binomial)
+summary(mymodel)
+
+cond_f <- Hh_Hl
+choice_left <- ifelse(cond_f$Click == 1, 1, 0)
+cond_f <- cbind(cond_f, choice_left)
+
+
+mymodel = glmer(choice_left ~ D_Ranks + TrialType + (1 | Subject),
+                data = cond_f,
+                family = binomial)
+summary(mymodel)
+
+
+#Plot individuals + means
+cond_f$Subject <- as.factor(cond_f$Subject)
+
+#Means
+gd <- cond_f %>% 
+        group_by(D_Ranks) %>% 
+        summarise(choice_left = mean(choice_left))
+
+p_sub <- ggplot(data = cond_f, aes(x = D_Ranks, y = choice_left)) +
+  geom_line(stat="smooth", alpha = 1, method='glm', family = binomial, se=FALSE , show.legend = FALSE, lwd=2) +
+  #geom_line(stat="smooth", alpha = 1, aes(x = gd$D_Ranks, y = gd$choice_left), lwd=4)+
+  scale_x_continuous(limits=c(min(cond_f$D_Ranks),max(cond_f$D_Ranks))) +
+  scale_y_continuous(limits=c(0, 1.0))+
+  labs(x="Rank difference (left – right)", y = "Propensity to choose the target at the left position
+")
+
+p_sub + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=18, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=18, angle=0))
+  #axis.text=element_text(color="black", 
+                            # size=20, angle=0),
+  #axis.title=element_text(color="black", 
+                             #size=16, angle=0))
+                             
+                             
+
+
+```
+
+Influence of tasks' order
+```{r}
+#ii = 105
+task_order <- NULL
+J <- 1
+
+for (ii in 107:max(mydata$Subject)){
+ temp_data <- mydata[mydata$Subject==ii,]
+
+if(temp_data$LeftContext[1]=='None'){task_order[J] <-0}
+ else{task_order[J] <-1}
+ 
+ J <- J+1
+
+#temp_data <- cbind(temp_data, task_order)  
+}
+  
+
+
+```
+
+
+Accuracy as a function of the ranks
+```{r}
+#Transpose data such that ranks on left are always lower than ranks on right
+
+cond <- mydata
+
+small_loc <- ifelse(cond$LeftRank < cond$RightRank, 1, 0) #if left-rank is smaller than right-rank
+cond <- cbind(cond, small_loc)
+
+#Transposition: create two transposed LeftRank and RightRank vactors
+
+trans_rankLeft <- NULL
+trans_rankRight <- NULL
+
+for (ii in 1:length(small_loc)){ #the direction doesn't change
+  if(cond$small_loc[ii] == 1){
+    trans_rankLeft[ii]<- cond$LeftRank[ii]
+    trans_rankRight[ii]<- cond$RightRank[ii]
+  }
+  else{ #the direction changes
+    trans_rankLeft[ii]<- cond$RightRank[ii]
+    trans_rankRight[ii]<- cond$LeftRank[ii]
+  }
+}
+
+
+cond <- cbind(cond, trans_rankLeft, trans_rankRight)
+
+#Accuracy as a function of sum of ranks
+cond$sum_rank <- cond$trans_rankRight + cond$trans_rankLeft
+cond$sum_rank  <- as.numeric(cond$sum_rank)
+
+fit2 = glm(Correct ~ sum_rank , data=cond, family=binomial)
+newdat <- data.frame(sum_rank =seq(min(cond$sum_rank), max(cond$sum_rank),len=100))
+newdat$Correct = predict(fit2, newdata=newdat, type="response")
+plot(Correct~sum_rank , data=cond, col="red4")
+lines(Correct~sum_rank , newdat, col="green4", lwd=2)
+
+#cond_grouped <- cond %>% group_by(trans_rankLeft, trans_rankRight)
+#cond_grouped <- cond_grouped %>% summarise(Correct = mean(Correct))
+
+#Summarize acuuracy for each pair of ranks
+cond_grouped <- cond %>%
+    group_by(trans_rankLeft, trans_rankRight) %>% 
+    summarise(n = n(),Correct = mean(Correct)) 
+
+cond_grouped$diff <- cond_grouped$trans_rankRight - cond_grouped$trans_rankLeft
+cond_grouped$diff <- as.numeric(cond_grouped$diff)
+
+#Sort by accuracy
+newdata <- cond_grouped[order(cond_grouped$Correct),] 
+
+sum(newdata$n)
+
+#save as an excel file
+write.csv(newdata, "rank_acc_all.csv")
+
+#Regression
+model1 = lm(Correct ~ trans_rankLeft + trans_rankRight,
+                     data=cond_grouped )
+summary(model1)
+
+#plot(cond_grouped$diff, cond_grouped$Correct)
+
+#3-D plot: https://plot.ly/r/3d-scatter-plots/
+library(plotly)
+packageVersion('plotly')
+#RStudio.version()
+
+##Plot must be in regular R file
+plot_ly(x = cond_grouped$trans_rankLeft, y = cond_grouped$trans_rankRight, z = cond_grouped$Correct, type="scatter3d", marker = list(color = cond_grouped$Correct, colorscale = c('#FFE1A1', '#683531'), showscale = TRUE)) %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'LeftRank'),
+                      yaxis = list(title = 'RighRank'),
+                      zaxis = list(title = 'Accuracy')),
+         annotations = list(
+           x = 1.13,
+           y = 1.05,
+           text = 'Accuracy',
+           xref = 'paper',
+           yref = 'paper',
+           showarrow = FALSE
+         ))
+
+
+```
+
+Load perception data
+```{r}
+setwd("C:/Users/Liz/Dropbox/SharedEbbin/Task/Results")
+ldf <- list() # creates a list
+listcsv <- dir(pattern = "ebbin.*csv") # creates the list of all the bdm-csv files in the directory
+for (k in 1:length(listcsv)){
+ ldf[[k]] <- read.csv(listcsv[k])
+}
+#str(ldf[[1]]) 
+
+mydata_percpet <- do.call("rbind", ldf)
+
+#mydata  <- data[!(data$Subject %in% c(0,32,6969,8915)),]
+#mydata <- mydata[complete.cases(mydata), ]
+#mydata <- mydata[(mydata$Subject > 112),] #pilot v1
+#mydata <- mydata[(mydata$Subject > 125),] #pilot V2
+mydata_percpet <- mydata_percpet[(mydata_percpet$Subject > 200),] #pilot V3
+mydata_percpet <- mydata_percpet[(mydata_percpet$Choice == 1 | mydata_percpet$Choice == 2),] #exclude missed trials
+
+#Problematic subjects (problem with BDM)
+#pp <- c(114,118,119) #pilot v1
+pp <- c(203,204) #pilot v2
+#Remove problematic subjects
+mydata_percpet <- mydata_percpet[!(mydata_percpet$Subject %in% pp),]
+```
+
+temporal biases
+```{r}
+#For each subject
+#Add a column of the rank (value?) of the chosen product in the previous trial
+value_previous <- NULL
+cond <- Hh_Hl
+ii <- 115
+#bb <- 2
+for(ii in unique(cond$Subject)){
+  temp_data <- cond[cond$Subject==ii,]
+  for(bb in 2:length(temp_data$Trial)){
+    if(temp_data$Click[bb-1]==1){ #chose the left object
+       temp_data$value_previous[bb] <- temp_data$LeftRank[bb-1]}
+       else{temp_data$value_previous[bb] <- temp_data$RightRank[bb-1]} #chose the right object
+  }
+ 
+ model = glm(Correct ~ abs_D_Ranks + value_previous , data=temp_data, family=binomial)
+ summary(model)
+   
+ }
+
+#All subjects
+value_previous <- NULL
+cond <- Hh_Hl
+#ii <- 113
+#bb <- 2
+
+#Add a column of the rank (value?) of the chosen product in the previous trial
+  for(bb in 2:nrow(cond)){
+    if(cond$Click[bb-1]==1){ #chose the left object
+       cond$value_previous[bb] <- cond$LeftRank[bb-1]}
+       else{cond$value_previous[bb] <- cond$RightRank[bb-1]} #chose the right object
+  }
+
+cond <- cond[!(cond$Trial %in% 1),]
+
+mymodel = glmer(Correct ~ abs_D_Ranks + value_previous + cond_type + (1 | Subject),
+                data = cond,
+                family = binomial)
+summary(mymodel)
+
+```
+
+Simulation - divisive normaliztion
+```{r}
+#Simulation according to rank
+#Add two columns which describe each option accrding to divisive normaliztion
+high_context <- 54
+low_context <- 6
+cond <- cond_s
+
+object_left <- NULL
+object_right <- NULL
+
+for(bb in 1:nrow(cond)){
+    if(cond$LeftContext[bb] == "High"){ 
+       cond$object_left[bb] <- cond$LeftRank[bb]/(high_context + cond$LeftRank[bb] + cond$RightRank[bb])   #if the left context is high
+        cond$object_right[bb] <- cond$RightRank[bb]/(low_context + cond$RightRank[bb] + cond$LeftRank[bb])} 
+       else{cond$object_left[bb] <- cond$LeftRank[bb]/(low_context + cond$LeftRank[bb] + cond$RightRank[bb])  #if the left context is low
+       cond$object_right[bb] <- cond$RightRank[bb]/(high_context + cond$RightRank[bb] + cond$LeftRank[bb])} 
+  }
+
+#Add a column which represents the choice according to the divisive normaliztion simulation
+choice_sim <- NULL
+for(bb in 1:nrow(cond)){
+    if(cond$object_left[bb] > cond$object_right[bb]){ 
+       cond$choice_sim[bb] <- 1   #if the left object is higher
+       } 
+       else{cond$choice_sim[bb] <- 0  #if the right object is higher
+       }    
+}
+
+mymodel = glmer(choice_sim ~ D_Ranks + (1 | Subject),
+                data = cond,
+                family = binomial)
+summary(mymodel)
+
+```
+
+Overlapping of high/low context between subjects
+```{r}
+library(plotrix)
+  
+#Group by block and item name
+table_block <- mydata %>%
+    group_by(Block, ItemName) %>% 
+    summarise_each(funs(mean))
+
+#divide into 2 blocks
+block1 <- table_block[ which(table_block$Block == 1) , ]
+block2 <-table_block[ which(table_block$Block == 2) , ]
+
+block1_new <- block1[order(block1$ItemName),] 
+block2_new <- block2[order(block2$ItemName),]
+
+plot(block1_new$SlideValue, block2_new$SlideValue)
+cor.test(block1_new$SlideValue, block2_new$SlideValue)
+
+```
+
+
+RTs
+```{r}
+#mean RT after evaluation time
+meanRT_basic <- mean(base_cond$ChoiceRT)
+meanRT_ebbin <- mean(ebbin_cond$ChoiceRT)
+
+base <- rep(0, length(base_cond$ChoiceRT))
+ebbin <- rep(1, length(ebbin_cond$ChoiceRT))
+
+base1<- cbind(base,base_cond$ChoiceRT)
+ebbin1 <- cbind(ebbin,ebbin_cond$ChoiceRT)
+
+base_ebbin1 <- rbind(base1,ebbin1)
+base_ebbin1 <- as.data.frame(base_ebbin1)
+colnames(base_ebbin1) <- c("cond", "RT")
+base_ebbin1$cond <- as.factor(base_ebbin1$cond)
+
+#box plot
+p <- ggplot(base_ebbin1, aes(x=cond, y=RT)) + 
+ geom_boxplot(notch = TRUE)+
+  labs(x = "condition", y = "RT (msec)")
+  #scale_y_continuous(limits=c(0, 0.8))
+
+p + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                             size=20, angle=0),
+  axis.title=element_text(color="black", 
+                             size=20, angle=0)
+)
+
+#violin plot
+p <- ggplot(base_ebbin1, aes(x=cond, y=RT))  + 
+  geom_violin()
+p + stat_summary(fun.y=mean, geom="point", shape=23, size=2)
+
+library(plotrix)
+
+#Compare RTs in different conditions
+#Group by subject
+table_basic <- base_cond %>%
+    group_by(Subject) %>% 
+    summarise_all(funs(mean))
+
+table_ebbin <- cond_s %>%
+    group_by(Subject) %>% 
+    summarise_all(funs(mean))
+
+table_Hh <- Hh_cond  %>%
+    group_by(Subject) %>% 
+    summarise_all(funs(mean))
+
+table_Hl <- Hl_cond  %>%
+    group_by(Subject) %>% 
+    summarise_all(funs(mean))
+
+table_hh <- hh_cond  %>%
+    group_by(Subject) %>% 
+    summarise_all(funs(mean))
+
+table_ll <- ll_cond  %>%
+    group_by(Subject) %>% 
+    summarise_all(funs(mean))
+
+all_table <- cbind(table_basic$Subject, table_basic$ChoiceRT, table_ebbin$ChoiceRT, table_Hh$ChoiceRT, table_Hl$ChoiceRT, table_hh$ChoiceRT, table_ll$ChoiceRT)
+
+colnames(all_table) <- c("Subject", "Basic", "Ebbin", "Hh","Hl", "hh", "ll" 
+                         )
+all_table <- as.data.frame(all_table)
+
+#save as an excel file
+write.csv(all_table, "value_RT_pilotV2.csv")
+
+#Bar plot
+mean_base <- mean(all_table$Basic)
+mean_ebbin <- mean(all_table$Ebbin)
+
+means = c(mean_base, mean_ebbin) 
+
+cols <- c("gray", "darkred")
+barplot(means,
+space=2,
+col = cols)
+
+#plot RT
+cond_f <- Hh_Hl
+abs_D = abs(cond_f$D_Ranks)
+
+RT_model = lmer(ChoiceRT ~ abs_D + cond_type + (1 | Subject),
+                     data=cond_f , REML=FALSE)
+summary(RT_model)
+
+RT_model.null = lmer(ChoiceRT ~ abs_D  + (1|Subject), 
+                     data=cond_f,
+REML=FALSE)
+
+anova(RT_model.null,RT_model)
+
+plot(abs_D , cond_f $ChoiceRT)
+
+
+```
