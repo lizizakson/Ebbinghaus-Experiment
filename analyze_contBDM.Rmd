@@ -1,0 +1,1812 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+rm(list = ls())  
+#work computer
+#mywd="C:/Users/User/Dropbox/SharedEbbin/Task/Results/pilot_v6"
+#home computer
+mywd="C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v6"
+setwd(mywd)
+
+#Install libraries
+#install and read package for reading ecxel files
+##install.packages("installr")
+##install.packages("readxl")
+##install.packages("dplyr")
+##install.packages("caTools")
+##install.packages("ggplot2")
+##install.packages("GGally")
+##install.packages("reshape2")
+##install.packages("lme4")
+##install.packages("compiler")
+#install.packages("parallel")
+#install.packages("boot")
+#install.packages("lattice")
+#install.packages("sjPlot")
+#install.packages("sjlabelled")
+#install.packages("sjmisc")
+#install.packages("ggplot2")
+#install.packages("languageR")
+#install.packages("plotrix")
+#install.packages("psych")
+#install.packages("hash")
+#install.packages("reticulate")
+#install.packages("lmerTest")
+#install.packages("nlme")
+#install.packages("jtools") 
+#install.packages("interactions")
+#install.packages("emmeans", dependencies=TRUE)
+#install.packages("latticeExtra")
+#install.packages("Hmisc", dependencies=TRUE) 
+
+#Load libraries
+library(installr)
+library("readxl")
+library(caTools)
+library(dplyr)
+require(ggplot2)
+require(GGally)
+require(reshape2)
+require(lme4)
+require(compiler)
+require(parallel)
+require(boot)
+require(lattice)
+#library(sjPlot)
+#library(sjlabelled)
+#library(sjmisc)
+#library(ggplot2)
+#library(languageR)
+library(psych)
+library(hash)
+library(reticulate)
+library(lmerTest)
+library(nlme)
+library(jtools)
+library(interactions)
+library(emmeans)
+library(Hmisc)
+
+#files <- list.files(path = mywd)
+
+
+#mydata <- read.csv("ValuePerception-8915-bdm.csv")
+
+```
+
+Concatenate several data frames
+```{r}
+setwd("C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v6")
+ldf <- list() # creates a list
+listcsv <- dir(pattern = "ContBDM.*csv") # creates the list of all the bdm-csv files in the directory
+for (k in 1:length(listcsv)){
+ ldf[[k]] <- read.csv(listcsv[k])
+}
+#str(ldf[[1]]) 
+
+mydata <- do.call("rbind", ldf)
+
+#mydata  <- data[data$Subject %in% c(113,114,115,116,117,118),]
+#mydata <- data[(data$Subject > 112),] #pilot V1
+#mydata <- data[(data$Subject > 200),] #pilot V3
+#mydata <- data[(data$Subject > 300),] #pilot V4
+#mydata <- data[(data$Subject > 400),] #pilot V5
+
+#exclude missed trials
+mydata <- mydata %>% filter(SlideValue != "NaN")
+
+#Problematic subjects (problem with BDM)
+#pp <- c(114,118,119,124) #pilot v1
+#pp <- c(127,132,137,149,156,157) #pilot v2
+#pp <- c(203,204) #pilot v3
+#pp <- c(203,204, 225, 228) #pilot 3 all
+pp <- c(601,604,605)
+#Remove problematic subjects
+mydata <- mydata[!(mydata$Subject %in% pp),]
+
+length(unique(mydata$Subject))
+
+#How many missed trials for each subject?
+table_freq <- mydata %>%
+   group_by(Subject) %>% 
+   summarise_each(funs(Freq=n()))
+
+```
+
+Insert perception threshold to the main data set - pilot v6
+```{r}
+#rep(1:5, vect1)
+rep_times <- as.vector(table_freq$Index_Freq)
+
+#rep_times <- c(191,188,198,200,199,199,197,197)
+
+#Ebbinghaus thresholds for the 8 participants  
+percept_threshold <- c(7.084958568,
+11.04805337,
+7.386836338,
+5.815920542,
+8.538323808,
+10.26134745,
+8.6650378,
+12.6326473
+)
+
+
+percept_threshold_rep <- rep(percept_threshold, times = rep_times)
+
+#slopes from transposed data
+#percept_slope <- c(0.327428505, 0.225191223, 0.364145479, 0.457497755, 0.477770363, 0.153681849, 0.381418521, 0.509231735, 0.707449886, 0.876649834, 0.660586866, 0.438189418, 0.367491257)
+
+#slopes from non-transposed data (from random slope model)
+#percept_slope <- c(0.09784554, 0.05891738, 0.12641929, 0.08601097, 0.20995291, 0.06620980, 0.21606553, 0.08215208, 0.03564370, 0.24623518, 0.18907364, 0.21408459, 0.05475835)
+
+#slopes from non-transposed data (from each subject seperatly)
+#percept_slope <- c( 0.10119353, 0.05620131, 0.12481882, 0.07982303, 0.23857120, 0.05986925, 0.24597558, 0.07492296, 0.02807376, 0.30845701, 0.21137708, 0.25560511, 0.04750661)
+
+#slopes from non-transposed data (from each subject seperatly)_all
+#percept_slope <- c( 0.10119353, 0.05620131, 0.12481882, 0.07982303, 0.23857120, 0.05986925, 0.24597558, 0.07492296, 0.02807376, 0.30845701, 0.21137708, 0.25560511, 0.04750661, 0.1051487)
+
+
+#percept_slope_rep <- rep(percept_slope, each = 300)
+
+mydata <- cbind(mydata, percept_threshold_rep)
+
+```
+
+Pre-processing  
+```{r}
+#mydata <- subset(mydata, Rank > 21 & Rank < 40)
+#mydata <- subset(mydata, OldValue < 20)
+#divide into 3 data sets
+low_con <- mydata[ which(mydata$TrialType == "Low") , ]
+high_con <- mydata[ which(mydata$TrialType == "High") , ]
+catch_con <- mydata[ which(mydata$TrialType == "Catch") , ]
+
+low_high <- mydata[ which(mydata$TrialType == "Low" | mydata$TrialType == "High" ) , ]
+low_high$y_norm <- (low_high$SlideValue - low_high$OldValue)/low_high$OldValue
+low_high$new_old_diff <- low_high$SlideValue - low_high$OldValue
+
+#How many missed trials for each subject?
+table_freq <- low_high %>%
+   group_by(Subject) %>% 
+   summarise_each(funs(Freq=n()))
+
+sum_trials <- sum(table_freq$Index_Freq)
+
+#How many trials of each condition in the ebbin cond?
+summary(mydata$TrialType)
+
+
+```
+
+load basic BDM data
+```{r}
+
+setwd("C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v6")
+ldf <- list() # creates a list
+listcsv <- dir(pattern = "bdm.*csv") # creates the list of all the bdm-csv files in the directory
+for (k in 1:length(listcsv)){
+ ldf[[k]] <- read.csv(listcsv[k])
+}
+#str(ldf[[1]]) 
+
+basicBDM <- do.call("rbind", ldf)
+
+#mydata  <- data[data$Subject %in% c(113,114,115,116,117,118),]
+#mydata <- data[(data$Subject > 112),] #pilot V1
+#mydata <- data[(data$Subject > 200),] #pilot V3
+#mydata <- data[(data$Subject > 300),] #pilot V4
+#mydata <- data[(data$Subject > 400),] #pilot V5
+basicBDM <- basicBDM[complete.cases(basicBDM), ]
+#basicBDM <- basicBDM[,-(4)]
+
+#Problematic subjects (problem with BDM)
+#pp <- c(114,118,119,124) #pilot v1
+#pp <- c(127,132,137,149,156,157) #pilot v2
+#pp <- c(203,204) #pilot v3
+#pp <- c(203,204, 225, 228) #pilot 3 all
+pp <- c(601,604,605) #pilot 6
+#Remove problematic subjects
+basicBDM <- basicBDM[!(basicBDM$Subject %in% pp),]
+
+#basicBDM <- subset(basicBDM, SlideValue < 20)
+
+length(unique(basicBDM$Subject))
+
+
+table_freq <- basicBDM %>%
+   group_by(Subject) %>% 
+   summarise_each(funs(Freq=n()))
+
+```
+
+Build dictionary
+```{python}
+def getVal(str):
+  print("will check: "+str)
+  import csv
+  res={}
+  with open('dict.csv', mode='r') as infile:
+    reader = csv.DictReader(infile, delimiter=',')
+    for row in reader:
+          res[row['ItemName']]=row['mean_value']
+  print("found that - "+str+":"+res[str]+" (will cast it to float and return)")
+  return float(res[str])
+getVal("Vodka")
+
+
+```
+
+Replace the oldValue of catch trials in mydata to the oldValue from the dictionary (the correct oldValue) - still in progress
+```{r}
+#There was a mistake in the experiment: the oldValue of the catch trials isn't the correct value for the item. This part intend to fix it
+#library that connects between python and r
+library(reticulate)
+##Build a dictionary of the original values of the products for each subject according to BDM basic
+cond_f <- basicBDM #build dictionary from the basic BDM data
+cond_m <- mydata #use the dictionary to replace the oldValue in the catch trials in mydata
+#create an empty vector of context_value
+
+catch_oldValue <- NULL
+
+
+#loop over all subjects inside mydata
+for (ss in unique(cond_f$Subject)){
+ss<-602
+ temp_data <- cond_f[cond_f$Subject==ss,]
+
+ catch_oldValue_persub <- NULL
+ 
+ #Group by item name
+ table_item <- temp_data %>%
+  group_by(ItemName) %>%
+  summarize(mean_value = mean(SlideValue))
+ 
+#Create a dictionary of item name and count
+  items_dict<- NULL
+  data <- table_item 
+  
+  #save as csv                        
+write.csv(data, "dict.csv")
+
+write.csv(data_correct, "data.csv")
+
+#loop over all trials in the catch condition and replace the oldValue term
+ temp_data2 <- cond_m[cond_m$Subject==ss,]
+for (ii in 1:nrow(temp_data2)){
+ # ii = 3
+   tryCatch(
+  source_python("helpers.py"),
+   error=function(e) e
+    )
+    #Check if trial is a catch trial
+  if(temp_data2$TrialType[ii] == "Catch" ){
+    cmd<-paste("res=getVal('",temp_data2$ItemName[ii],"')",sep="")
+   # print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    #catch_oldValue_persub[ii] <- py$res
+    #catch_con[, "OldValue"] <- catch_oldValue
+mydata[ii, "OldValue"] <- py$res
+}
+
+    #save as csv                        
+write.csv(cond_m, "mydata.csv")
+
+#order_items_perSub <- t(order_items_perSub)
+catch_oldValue <- c(catch_oldValue, catch_oldValue_persub)
+# order_items <- as.factor(order_items)  
+#summary(order_items)
+}
+
+#Replace the column of "oldValue" to the correct "oldValue"
+catch_con[, "OldValue"] <- catch_oldValue
+
+#catch_con <- cbind(catch_con, catch_oldValue)
+
+#low_high$context_target_diff <- low_high$context_value - low_high$OldValue
+
+#low_high$abs_context_target_diff <- abs(low_high$context_value - low_high$OldValue)
+
+
+```
+
+Replace the vector of oldValue in the catch data and create data_correct
+```{r}
+#There was a mistake in the experiment: the oldValue of the catch trials isn't the correct value for the item. This part intend to fix it
+#library that connects between python and r
+library(reticulate)
+##Build a dictionary of the original values of the products for each subject according to BDM basic
+cond_f <- basicBDM #build dictionary from the basic BDM data
+cond_m <- catch_con #use the dictionary to calculate the context of each trial in the context task
+#create an empty vector of context_value
+
+catch_oldValue <- NULL
+
+
+#loop over all subjects inside mydata
+for (ss in unique(cond_f$Subject)){
+# ss<-602
+ temp_data <- cond_f[cond_f$Subject==ss,]
+
+ catch_oldValue_persub <- NULL
+ 
+ #Group by item name
+ table_item <- temp_data %>%
+  group_by(ItemName) %>%
+  summarise(mean_value = mean(SlideValue))
+ 
+#Create a dictionary of item name and count
+  items_dict<- NULL
+  data <- table_item 
+  
+  #save as csv                        
+write.csv(data, "dict.csv")
+
+
+#loop over all trials in the catch condition
+ temp_data2 <- cond_m[cond_m$Subject==ss,]
+for (ii in 1:nrow(temp_data2)){
+ # ii = 3
+   tryCatch(
+  source_python("helpers.py"),
+   error=function(e) e
+    )
+  #old value of the item
+    cmd<-paste("res=getVal('",temp_data2$ItemName[ii],"')",sep="")
+   # print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    catch_oldValue_persub[ii] <- py$res
+    
+ 
+}
+
+#order_items_perSub <- t(order_items_perSub)
+catch_oldValue <- c(catch_oldValue, catch_oldValue_persub)
+# order_items <- as.factor(order_items)  
+#summary(order_items)
+}
+
+#Replace the column of "oldValue" to the correct "oldValue"
+catch_con[, "OldValue"] <- catch_oldValue
+
+#Concatenate the correct catch data with low_high data = data_correct
+data_correct <- rbind(low_high, catch_con)
+#y_norm: (new-old)/old --> problematic because there can be division by zero
+data_correct$y_norm <- (data_correct$SlideValue - data_correct$OldValue)/data_correct$OldValue
+
+#divide between high and low catch
+data <- catch_con
+high_catch <- data[ which(data$LeftSide == "High") , ]
+low_catch <- data[ which(data$LeftSide == "None") , ]
+
+
+```
+
+Add a vector of mean context values
+```{r}
+library(reticulate)
+##Build a dictionary of the original values of the products for each subject according to BDM basic
+cond_f <- basicBDM #build dictionary from the basic BDM data
+cond_m <- low_high #use the dictionary to calculate the context of each trial in the context task
+#create an empty vector of context_value
+
+context_value <- NULL
+
+
+#loop over all subjects inside mydata
+for (ss in unique(cond_f$Subject)){
+# ss<-602
+ temp_data <- cond_f[cond_f$Subject==ss,]
+
+ context_value_perSub <- NULL
+ 
+ #Group by item name
+ table_item <- temp_data %>%
+  group_by(ItemName) %>%
+  summarise(mean_value = mean(SlideValue))
+ 
+#Create a dictionary of item name and count
+  items_dict<- NULL
+  data <- table_item 
+  
+  #save as csv                        
+write.csv(data, "dict.csv")
+
+#Use the dictinary
+#loop over all trials in the BDM context
+ temp_data2 <- cond_m[cond_m$Subject==ss,]
+for (ii in 1:nrow(temp_data2)){
+ # ii = 3
+   tryCatch(
+  source_python("helpers.py"),
+   error=function(e) e
+    )
+  #context is on the right side
+  if(temp_data2$LeftSide[ii] == "None" ){
+    cmd<-paste("res=getVal('",temp_data2$RightContext1[ii],"')",sep="")
+   # print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    Context1 <- py$res
+    
+    cmd<-paste("res=getVal('",temp_data2$RightContext2[ii],"')",sep="")
+    #print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    Context2 <- py$res
+    context_value_perSub[ii] <-mean(c(Context1,Context2))
+    
+   #context_value_perSub[ii] <- mean(items_dict[temp_data$RightContext1[ii]], items_dict[temp_data$RightContext2[ii]])
+    
+  } else{
+  #context is on the left side
+    
+    cmd<-paste("res=getVal('",temp_data2$LeftContext1[ii],"')",sep="")
+    #print(cmd)
+    tryCatch(
+    py_run_string(cmd),
+     error=function(e) e
+    )
+    
+    Context1 <- py$res
+    
+    cmd<-paste("res=getVal('",temp_data2$LeftContext2[ii],"')",sep="")
+   # print(cmd)
+    tryCatch(
+      py_run_string(cmd),
+      error=function(e) e
+    )
+    
+    Context2 <- py$res
+    context_value_perSub[ii] <-mean(c(Context1,Context2))
+    #context_value_perSub[ii] <- mean(items_dict[temp_data$LeftContext1[ii]], items_dict[temp_data$LeftContext2[ii]])}
+  }
+ 
+}
+
+#order_items_perSub <- t(order_items_perSub)
+context_value <- c(context_value, context_value_perSub)
+# order_items <- as.factor(order_items)  
+#summary(order_items)
+}
+
+low_high <- cbind(low_high, context_value)
+#data_correct <- cbind(data_correct, context_value)
+
+##Difference between context value and the old value of the target
+low_high$context_target_diff <- low_high$context_value - low_high$OldValue
+#data_correct$context_target_diff <- data_correct$context_value - data_correct$OldValue
+
+low_high$abs_context_target_diff <- abs(low_high$context_value - low_high$OldValue)
+#data_correct$abs_context_target_diff <- abs(data_correct$context_value - data_correct$OldValue)
+
+```
+
+Relationships between different variables in the data
+```{r}
+cond_f <- low_high
+
+ggpairs(cond_f[, c( "OldValue", "context_value", "context_target_diff", "SlideValue" )])
+
+ggpairs(cond_f[, c( "OldValue", "context_value", "abs_context_target_diff", "SlideValue" )])
+
+cond_f$y_z <- scale(cond_f$SlideValue)
+cond_f$oldValue_z <- scale(cond_f$OldValue)
+cond_f$context_target_diff_z <- scale(cond_f$context_target_diff)
+##################################################################################################
+#problematic distribution of data?
+cond_f <- low_high
+cond_f <- subset(low_high, Rank > 16)
+cond_f <- subset(cond_f, Rank < 45 )
+describe(cond_f$OldValue)
+#cond_f <- subset(cond_f, TrialType == "High")
+plot(cond_f$OldValue, cond_f$y_norm)
+abline(h=0, col="blue")
+
+p <- plot(cond_f$oldValue, cond_f$context_target_diff)
+abline(h=0, col="blue")
+p + facet_grid(.~Subject)
+
+plot(cond_f$context_value, cond_f$new_old_diff)
+abline(h=0, col="blue")
+##################################################################################################
+#Draw the relation between two variables and color the dots according to subjects
+cond_f$Subject <- as.factor(cond_f$Subject)
+
+g <- ggplot(cond_f, aes(x=OldValue, y=context_target_diff)) + 
+  geom_point(size= 2)+
+  #geom_smooth(method=lm, size = 2)+
+  #scale_x_continuous(limits=c(0, 20)) +
+  #scale_y_continuous(limits=c(0.4, 0.7))+
+  labs(x="Old Value", y = "context_value")
+
+g + facet_grid(.~Subject)
+
+g + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                             size=22, angle=0),
+  axis.title=element_text(color="black", 
+                             size=22, angle=0))
+
+##################################################################################################
+#Draw the relation between 3 variables
+cond_f <- low_high
+
+ggplot(data = cond_f) + 
+  geom_point(mapping = aes(x = OldValue, y = SlideValue
+                           , color = context_target_diff))
+
+```
+
+slide value before and after
+```{r}
+#Group by item name for each context
+table_item <- high_con %>%
+    group_by(ItemName) %>% 
+    summarise_each(funs(mean,Freq=n()))
+
+old <- table_item$OldValue_mean
+new <- table_item$SlideValue_mean
+t.test(old,new,paired=TRUE)
+
+describe(old)
+describe(new)
+```
+
+slide value before and after - on average for each condition
+```{r}
+#list of all conditions
+cond_all <- list(low_con, high_con)
+#cond_all <- list(low_con, high_con, high_catch, low_catch)
+
+#loop over conditions
+for (ii in 1:length(cond_all)){
+#ii <- 2
+cond_f <- cond_all[[ii]]
+
+#Group by subject and item name for each context
+table_item <- cond_f %>%
+    group_by(Subject) %>% 
+    summarise_each(funs(mean,Freq=n()))
+
+old <- rep(0, length(table_item$Subject))
+new <- rep(1, length(table_item$Subject))
+
+old1<- cbind(old,table_item$OldValue_mean)
+new1 <- cbind(new,table_item$SlideValue_mean)
+
+old_new1 <- rbind(old1,new1)
+old_new1 <- as.data.frame(old_new1)
+colnames(old_new1) <- c("cond", "slide_value")
+old_new1$cond <- as.factor(old_new1$cond)
+
+#Bar plot
+gd <- old_new1 %>% 
+        group_by(cond) %>% 
+        summarise(slide_value = mean(slide_value))
+
+p <- ggplot(old_new1, aes(x = cond, y = slide_value, color = cond, fill = cond)) +
+  geom_point(size = 2) +
+  geom_bar(data = gd, stat = "identity", alpha = .5, fill =  c("#FF3232","#32CD32") ) +
+  scale_y_continuous(limits=c(0, 30))+
+  #scale_color_manual(values=c("#FF3232","#368FBF")) #low context
+ scale_color_manual(values=c("#FF3232","#32CD32"))  #high context 
+ #scale_color_manual(values=c("#FF3232","#C0C0C0"))  #catch context 
+ 
+p + 
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black", size = 1),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0)
+  #axis.text=element_text(color="black", 
+                            # size=20, angle=0),
+  #axis.title=element_text(color="black", 
+                             #size=20, angle=0)
+)
+
+print(p)
+
+t.test(table_item$OldValue_mean,table_item$SlideValue_mean,paired=TRUE) # where y1 & y2 are numeric
+mean(table_item$OldValue_mean)
+mean(table_item$SlideValue_mean)
+
+}
+
+
+```
+
+diffs before and after - per subject and condition (per subject)
+```{r}
+#list of all conditions
+cond_all <- list(low_con, high_con, catch_con)
+
+diff_table <- matrix(nrow = length(unique(mydata$Subject)), ncol = length(cond_all))
+#indicate namuber of row and column
+j <- 1 #row
+r <- 1 #column
+
+#loop over conditions
+for (ii in 1:length(cond_all)){
+ # ii <- 1
+cond_f <- cond_all[[ii]]
+
+#loop over subjects inside a condition
+for (ss in unique(cond_f$Subject)){
+ # ss<-602
+ temp_data <- cond_f[cond_f$Subject==ss,]
+
+#Group by item name for each context
+table_item <- temp_data %>%
+    group_by(ItemName) %>% 
+    summarise_each(funs(mean,Freq=n()))
+
+old <- rep(0, length(table_item$ItemName))
+new <- rep(1, length(table_item$ItemName))
+
+old1<- cbind(old,table_item$OldValue_mean)
+new1 <- cbind(new,table_item$SlideValue_mean)
+
+old_new1 <- rbind(old1,new1)
+old_new1 <- as.data.frame(old_new1)
+colnames(old_new1) <- c("cond", "slide_value")
+old_new1$cond <- as.factor(old_new1$cond)
+
+#Bar plot
+gd <- old_new1 %>% 
+        group_by(cond) %>% 
+        summarise(slide_value = mean(slide_value))
+
+p <- ggplot(old_new1, aes(x = cond, y = slide_value, color = cond, fill = cond)) +
+  geom_point(size = 2) +
+  geom_bar(data = gd, stat = "identity", alpha = .5, fill =  c("#FF3232","#C0C0C0") ) +
+  #scale_y_continuous(limits=c(0, 0.8))+
+  #scale_color_manual(values=c("#FF3232","#368FBF")) #low context
+ #scale_color_manual(values=c("#FF3232","#32CD32"))  #high context 
+ scale_color_manual(values=c("#FF3232","#C0C0C0"))  #catch context 
+ 
+p + 
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black", size = 1),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0)
+  #axis.text=element_text(color="black", 
+                            # size=20, angle=0),
+  #axis.title=element_text(color="black", 
+                             #size=20, angle=0)
+)
+
+print(p)
+
+t.test(table_item$OldValue_mean,table_item$SlideValue_mean,paired=TRUE) # where y1 & y2 are numeric
+mean(table_item$OldValue_mean)
+mean(table_item$SlideValue_mean)
+
+#create a table of diffs for each condition
+diff <- table_item$SlideValue_mean - table_item$OldValue_mean #(new-old)
+
+diff_table[j,r] <- mean(diff)
+
+j <- j+1
+}
+#When moving to a new condition, move to the next column and start a new counting of the rows
+r <- r+1
+j <- 1
+}
+
+#convert the matrix to a data frame
+diff_table <- as.data.frame(diff_table)
+diff_table <- cbind(unique(mydata$Subject),diff_table)
+colnames(diff_table) <- c("Subject", "Low","High", "Medium") 
+
+#save as csv                        
+write.csv(diff_table, "diff_table.csv")
+
+
+```
+
+WTPss before and after - per subject and condition
+```{r}
+#list of all conditions
+cond_all <- list(low_con, high_con, catch_con)
+
+#length(mydata$Subject)*length(mydata$ItemName)
+
+#WTP_table <- matrix(nrow = length(mydata$Subject)*length(mydata$ItemName), ncol = length(cond_all))
+
+WTP_table <- NULL
+WTP_table_perSub <- NULL
+
+#loop over conditions
+#for (ii in 1:length(cond_all)){
+ii <- 3
+cond_f <- cond_all[[ii]]
+
+#loop over subjects inside a condition
+for (ss in unique(cond_f$Subject)){
+# ss<-606
+ temp_data <- cond_f[cond_f$Subject==ss,]
+ 
+
+#Group by item name for each context
+table_item <- temp_data %>%
+    group_by(ItemName) %>% 
+    summarise_each(funs(mean,Freq=n()))
+
+#For each subject bind by column the subject number, item name, old value and new value
+WTP_table_perSub <- cbind(table_item$Subject_mean, table_item$ItemName, table_item$OldValue_mean, table_item$SlideValue_mean)
+
+#Bind together all the subjects
+WTP_table <- rbind(WTP_table, WTP_table_perSub)
+
+} 
+
+#Turn the matrix into a data frame
+WTP_table <- as.data.frame(WTP_table)
+colnames(WTP_table) <- c("Subject", "Item","Old_value", "New_value")
+
+#save as csv                        
+write.csv(WTP_table, "catch_table.csv")
+
+
+
+
+```
+
+Correlatin of slide value before and after per subject
+```{r}
+#Group by subject and item name for each context
+table_item <- mydata %>%
+    group_by(Subject, ItemName ) %>% 
+    summarise_each(funs(mean,Freq=n()))
+
+#Calculate the effect for each subject
+data_f <- table_item
+#ii <- 602
+for (ii in unique(data_f$Subject)){
+ temp_data <- data_f[data_f$Subject==ii,]
+
+old <- temp_data$OldValue_mean
+new <- temp_data$SlideValue_mean
+
+plot(old,new)
+corr <- cor.test(old,new, use="pairwise.complete.obs")
+print(corr[["estimate"]])
+}
+
+
+```
+
+slide value before and after - per subject and per low/high products
+```{r}
+#Group by subject and item name for each context
+table_item <- low_con %>%
+    group_by(Subject, ItemName ) %>% 
+    summarise_each(funs(mean,Freq=n()))
+
+#Calculate the effect for each subject
+data_f <- table_item
+#ii <- 602
+for (ii in unique(data_f$Subject)){
+ temp_data <- data_f[data_f$Subject==ii,]
+ 
+ # sort by value
+newdata <- temp_data[order(temp_data$OldValue_mean),]
+newdata_high <- newdata[(newdata$OldValue_mean>=mean(newdata$OldValue_mean)/2),]
+
+}
+
+```
+
+Create a vector of order of appearance for the items - BASIC TRIALS
+```{r}
+ 
+cond_f <- basicBDM
+
+#create an empty vector of order_items
+
+order_items_basic <- NULL
+
+
+#loop over all subjects inside mydata
+for (ss in unique(cond_f$Subject)){
+# ss<-611
+ temp_data <- cond_f[cond_f$Subject==ss,]
+ order_items_perSub <- NULL
+ 
+#Create a dictionary of item name and count
+  items_dict<- NULL
+  data <- cond_f
+item_num <- length(unique(data$ItemName))
+
+item_name <- unique(data$ItemName)
+initial <- rep(1,item_num) #initiate count from 1
+items <- cbind(item_name,initial)
+colnames(items) <- c("item_name", "count")
+
+
+items_dict <- as.list(items[,"count"])
+names(items_dict)<-items[,"item_name"]
+
+ 
+#temp_data$order_items <- rep(0,nrow(temp_data))
+
+#loop over all trials
+for (ii in 1:nrow(temp_data)){
+  #ii = 2
+ order_items_perSub[ii] <- items_dict[[temp_data$ItemName[ii]]]
+ #Add one to the count
+  items_dict[temp_data$ItemName[ii]] <- items_dict[[temp_data$ItemName[ii]]]+1
+  #typeof(items_dict[temp_data$ItemName[ii]])
+  
+  
+}
+##Concatenate each subject's vector with the rest of the vectors
+order_items_basic <- c(order_items_basic, order_items_perSub)
+
+
+}
+
+#order_items_basic <- as.factor(order_items_basic) 
+#summary(order_items_basic)
+
+basicBDM <- cbind(basicBDM, order_items_basic)
+
+
+```
+
+Create a vector of order of appearance for the items - CONTEXT TRIALS
+```{r}
+ 
+cond_f <- low_high
+
+#create an empty vector of order_items
+
+#order_items_basic <- NULL
+order_items <- NULL
+
+#loop over all subjects inside mydata
+for (ss in unique(cond_f$Subject)){
+# ss<-611
+ temp_data <- cond_f[cond_f$Subject==ss,]
+ order_items_perSub <- NULL
+ 
+#Create a dictionary of item name and count
+  items_dict<- NULL
+  data <- cond_f
+item_num <- length(unique(data$ItemName))
+
+item_name <- unique(data$ItemName)
+initial <- rep(4,item_num) #initiate count from 4
+items <- cbind(item_name,initial)
+colnames(items) <- c("item_name", "count")
+
+
+items_dict <- as.list(items[,"count"])
+names(items_dict)<-items[,"item_name"]
+
+ 
+#temp_data$order_items <- rep(0,nrow(temp_data))
+
+#loop over all trials
+for (ii in 1:nrow(temp_data)){
+  #ii = 2
+ order_items_perSub[ii] <- items_dict[[temp_data$ItemName[ii]]]
+ #Add one to the count
+  items_dict[temp_data$ItemName[ii]] <- items_dict[[temp_data$ItemName[ii]]]+1
+  #typeof(items_dict[temp_data$ItemName[ii]])
+  
+  
+}
+##Concatenate each subject's vector with the rest of the vectors
+#order_items_basic <- c(order_items_basic, order_items_perSub)
+order_items <- c(order_items, order_items_perSub) 
+
+}
+
+#order_items <- as.factor(order_items) 
+#summary(order_items)
+
+#Connect the order vector to the data
+low_high <- cbind(low_high, order_items)
+
+
+
+```
+
+Concatenate vectors for basicBDM and contextBDM
+```{r}
+full_model <- NULL
+
+length_basic <- nrow(basicBDM)
+length_context <- nrow(low_high)
+
+#Create vectors for the full model
+full_subject <- c(basicBDM$Subject, low_high$Subject)
+#full_order <- c(order_items_basic, order_items)
+
+#vector of trial nums
+full_trialNum <- c(basicBDM$Trial, low_high$Trial)
+
+#Create two dummy vectors of low and high context
+low_vec <- ifelse(low_high$TrialType == "Low", 1, 0)
+high_vec <- ifelse(low_high$TrialType == "High", 1, 0)
+#basic_vec <- rep(1, length_basic)
+
+basic_zero <- rep(0, length_basic)
+#context_zero <- rep(0, length_context)
+
+full_low <- c(basic_zero,low_vec)
+full_high <- c(basic_zero,high_vec)
+
+#vector of target loc as a factor
+full_targetLoc <- c(basic_zero, low_high$TargetLoc)
+
+#vector of left/right (left =1, right = 2)_for context trials!
+left_right <- NULL
+for (ii in 1:length_context){
+  #context is on the right side
+  if(low_high$LeftSide[ii] == "None" ){left_right[ii]=2}
+  else{left_right[ii]=1} #context is on the left side
+}
+
+full_left_right <- c(basic_zero, left_right)
+
+#vectors of context_means for low and high contexts
+context_mean <- c(basic_zero, low_high$context_value)
+
+#vector of item name and category
+full_itemName <- c(basicBDM$ItemName, low_high$ItemName)
+full_category <- c(basicBDM$Category, low_high$Category)
+
+#vector of y - slide values (basic,low,high)
+full_slideValue <- c(basicBDM$SlideValue, low_high$SlideValue) 
+
+#concatenate all vectors for the full model
+full_model <- cbind(full_subject, full_trialNum, full_category, full_itemName, full_low, full_high, full_targetLoc, full_left_right, full_slideValue)
+full_model <- as.data.frame(full_model)
+colnames(full_model) <- c("subject", "trialNum", "category", "ItemName", "low", "high", "targetLoc", "left_right","SlideValue")
+
+#vector of context_mean (low and high)
+full_model <- cbind(full_model, context_mean)
+low_contextMean <- ifelse(full_model$low==1,context_mean,0)
+high_contextMean <- ifelse(full_model$high==1,context_mean,0)
+
+
+full_model <- cbind(full_model, low_contextMean, high_contextMean)
+
+#save as csv                     
+write.csv(full_model, "full_model.csv")
+
+
+#pre-processing
+full_model$left_right <- as.factor(full_model$left_right)
+full_model$targetLoc <- as.factor(full_model$targetLoc)
+full_model$low <- as.factor(full_model$low)
+full_model$high <- as.factor(full_model$high)
+full_model$category <- as.factor(full_model$category)
+full_model$ItemName <- as.factor(full_model$ItemName)
+
+#GLM
+cond_f <- full_model
+
+mymodel = lmer(SlideValue ~ low + high + (1 | subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+```
+
+RT
+```{r}
+#Summary of RTs
+describe(low_high$SlideRT)
+boxplot(low_high$SlideRT)
+
+#per subject
+cond_f <-low_high
+for (ss in unique(cond_f$Subject)){
+# ss<-611
+ temp_data <- cond_f[cond_f$Subject==ss,]
+ boxplot(temp_data$SlideRT)
+}
+ 
+ 
+ 
+#RT as a function of other variables
+plot(low_high$order_items,low_high$SlideRT)
+
+reg<-lm(SlideRT ~ Trial, data = low_high)
+plot(low_high$Trial,low_high$SlideRT)
+abline(reg, col="blue")
+cor.test(low_high$Trial,low_high$SlideRT)
+
+
+```
+
+GLM
+```{r}
+library(lmerTest)
+library(nlme)
+
+
+cond_f <- NULL
+cond_f <- low_high
+#cond_f <- subset(data_correct, OldValue < 20)
+#pre-processing
+cond_f$TargetLoc <- as.factor(cond_f$TargetLoc)
+cond_f$Category <- as.factor(cond_f$Category)
+cond_f$ItemName <- as.factor(cond_f$ItemName)
+
+##Create vectors of mean_context_value and context_target_diff seperatly for low and high contexts
+#cond_f$high_context_mean <- ifelse(cond_f$TrialType == "High", cond_f$context_value, 0)
+#cond_f$low_context_mean <- ifelse(cond_f$TrialType == "Low", cond_f$context_value, 0)
+#cond_f$high_context_target_diff <- ifelse(cond_f$TrialType == "High", cond_f$context_target_diff, 0)
+#cond_f$low_context_target_diff <- ifelse(cond_f$TrialType == "Low", cond_f$context_target_diff, 0)
+
+#How many missed trials for each subject?
+table_freq <- cond_f %>%
+   group_by(Subject) %>% 
+   summarise_each(funs(Freq=n()))
+
+mymodel.null = lmer(SlideValue ~ OldValue*abs_context_target_diff + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel.null)
+
+mymodel = lmer(SlideValue ~ percept_threshold_rep + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+anova(mymodel.null, mymodel)
+
+anova(mymodel.null, mymodel)
+
+mymodel = lmer(SlideValue ~  OldValue*context_target_diff + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+anova(mymodel)
+
+
+mymodel.null= lmer(SlideValue ~ OldValue + TrialType + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel.null)
+        
+mymodel = lmer(SlideValue ~ OldValue*context_value + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+anova(mymodel.null, mymodel)
+
+#Correlation between vairables
+cor.test(data_correct$OldValue, data_correct$context_target_diff)
+plot(low_high$SlideValue, low_high$abs_context_target_diff)
+plot(low_high$abs_context_target_diff, low_high$SlideValue)
+
+plot(low_high$TrialType, low_high$context_target_diff)
+ggplot(aes(y = context_target_diff, x = TrialType), data = cond_f) + geom_boxplot()
+
+plot(cond_f$Rank, cond_f$OldValue)
+
+##y_norm (newValue-oldValue)/oldValue]
+
+mymodel.null = lmer(y_norm ~ percept_threshold_rep + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel.null)
+
+mymodel = lmer(y_norm ~  TrialType + context_value + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+anova(mymodel.null, mymodel)
+
+#cond_f$abs_2 <- cond_f$abs_context_target_diff*cond_f$abs_context_target_diff
+mymodel = lmer(y_norm ~  TrialType + poly(abs_context_target_diff,2) + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+#RT
+mymodel.null = lmer(SlideRT ~ TrialType + OldValue*context_target_diff + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel.null)
+
+mymodel = lmer(SlideRT ~ abs_context_target_diff + (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+anova(mymodel.null, mymodel)
+
+
+```
+
+Plot the interaction (link: https://cran.r-project.org/web/packages/interactions/vignettes/interactions.html#plotting_interactions)
+```{r}
+library(jtools) 
+library(interactions)
+
+cond_f <- low_high
+#cond_f <- data_correct
+#pre-processing
+cond_f$TargetLoc <- as.factor(cond_f$TargetLoc)
+cond_f$Category <- as.factor(cond_f$Category)
+cond_f$ItemName <- as.factor(cond_f$ItemName)
+
+#cond_f <- subset(cond_f, OldValue > -20 & OldValue < 20)
+
+#cond_f <- subset(cond_f, TrialType == "High")
+plot(cond_f$OldValue, cond_f$y_norm)
+abline(h=0, col="blue")
+
+plot(cond_f$OldValue, cond_f$context_target_diff)
+abline(h=0, col="blue")
+
+mymodel = lmer(y_norm_f ~ context_target_diff  +  (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+mymodel = lmer(SlideValue ~ OldValue*abs_context_target_diff  +  (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+
+mymodel = lmer(new_old_diff ~ OldValue*context_target_diff  +  (1 | Subject),
+                data = cond_f,
+               REML=FALSE
+                )
+summary(mymodel)
+
+##Draw plot of interaction
+interact_plot(mymodel, pred = OldValue, modx = abs_context_target_diff, plot.points = TRUE)
+interact_plot(mymodel, pred = context_target_diff, modx = OldValue, plot.points = TRUE)
+
+##Draw plot with observed data
+#interact_plot(mymodel, pred = OldValue, modx = context_target_diff , plot.points = TRUE)
+
+###################################################################################
+##Plotting a continuous by continuous interaction
+
+##Finding the trend of one variable as a function of the other
+
+describe(cond_f$context_target_diff)
+describe(cond_f$OldValue)
+
+mylist <- list(context_target_diff=seq(-30,30,by=0.5))
+emmip(mymodel,~context_target_diff,at=mylist, CIs=TRUE)
+
+diff_a <- mean(cond_f$context_target_diff) + sd(cond_f$context_target_diff)
+diff <- mean(cond_f$context_target_diff)
+diff_b <- mean(cond_f$context_target_diff) - sd(cond_f$context_target_diff)
+
+mylist <- list(context_target_diff=c(diff_a,diff,diff_b)) 
+emtrends(mymodel, ~context_target_diff, var="OldValue",at=mylist)
+
+##Another way to plot the interaction
+mylist <- list(OldValue=seq(2,30,by=0.5),context_target_diff=c(diff_a,diff,diff_b))
+mylist
+emmip(mymodel,context_target_diff~OldValue,at=mylist, CIs=TRUE)
+
+emtrends(mymodel, pairwise ~context_target_diff, var="OldValue",at=mylist, adjust="none")
+```
+
+Simple effects of the interaction
+```{r}
+##For each subject: divide the oldValue into bins
+cond_f <- NULL
+cond_f <-low_high
+cond_f$context_target_diff_binary <- ifelse(cond_f$context_target_diff > 0, 1, 0)
+cond_f$context_target_diff_binary <- as.factor(cond_f$context_target_diff_binary)
+
+
+##For each subject seperatly
+#loop over all subjects inside correct_data
+#for (ss in unique(cond_f$Subject)){
+#ss<-603
+ #temp_data <- cond_f[cond_f$Subject==ss,]
+
+##Create a vector of bins for old_value
+library(Hmisc) 
+cond_f$oldValue_ranks  <- cut(cond_f$OldValue, 10)
+
+table_freq <- cond_f %>%
+   group_by(oldValue_ranks) %>% 
+   summarise_each(funs(Freq=n()))
+
+table_mean <- cond_f %>%
+   group_by(Subject, oldValue_ranks) %>% 
+   summarise_each(funs(mean))
+
+table_mean$context_target_diff_binary <- ifelse(table_mean$context_target_diff > 0, 1, 0)
+table_mean$context_target_diff_binary <- as.factor(table_mean$context_target_diff_binary)
+
+#cond_f$wt2 <- as.numeric(cut2(cond_f$OldValue, g=8))
+#cond_f
+
+##plot the simple effects - observed data
+p <- ggplot(data=table_mean, aes(x=oldValue_ranks,y=SlideRT, fill=context_target_diff_binary)) + geom_bar(stat="identity",position="dodge")+
+  scale_x_discrete("Old Value Bins", labels=c("1", "2", "3", "4", "5", "6","7","8","9","10"))
+
+print(p)
+
+##############################################################################################
+##Create a vector of bins for abs_context_target_diff
+library(Hmisc)
+cond_f <- NULL
+cond_f <-low_high
+#cond_f <- subset(cond_f, context_target_diff > 0)
+cond_f$ranks  <- cut(cond_f$abs_context_target_diff, 10)
+
+table_freq <- cond_f %>%
+   group_by(ranks) %>% 
+   summarise_each(funs(Freq=n()))
+
+table_mean <- cond_f %>%
+   group_by(Subject, ranks) %>% 
+   summarise_each(funs(mean))
+
+
+#cond_f$wt2 <- as.numeric(cut2(cond_f$OldValue, g=8))
+#cond_f
+
+##plot the simple effects - observed data
+p <- ggplot(data=table_mean, aes(x=ranks,y=new_old_diff)) + geom_col(stat="identity",position="dodge", fill = "#368FBF") 
+
+p1 <- p +  geom_hline(yintercept=0, color = "black", linetype="dashed", 
+                 size=2)
+
+p1 + 
+  theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black", size = 1)
+)
+
+###############################################################################################
+
+##plot the simple effects - fitted data
+mymodel = lmer(SlideRT ~ oldValue_ranks*context_target_diff_binary +  (1 | Subject),
+                data = cond_f,
+             REML=FALSE
+                )
+summary(mymodel)
+
+catdata <- emmip(mymodel, context_target_diff_binary ~ oldValue_ranks, CIs=TRUE, plotit=FALSE)
+
+p <- ggplot(data=catdata, aes(x=oldValue_ranks,y=yvar, fill=context_target_diff_binary)) + geom_bar(stat="identity",position="dodge")
+p1 <- p + ?geom_errorbar(position=position_dodge(.9),width=.25, aes(ymax=UCL, ymin=LCL),alpha=0.3)
+
+print(p1)
+
+###########################################################################################
+data_hm <- NULL
+data_hm <- cbind(cond_f$OldValue, cond_f$context_target_diff, cond_f$SlideValue)
+data_hm <- as.data.frame(data_hm)
+
+heatmap(data_hm)
+
+p <- ggplot(cond_f, aes(OldValue, context_target_diff)) 
+
+p + geom_tile(aes(fill=SlideValue)) + scale_fill_gradient(low="green", high="red")
+
+ggplot(cond_f, aes(OldValue, SlideValue, color = context_target_diff)) + geom_point() 
+```
+
+Histograms of different variables (link: http://www.cookbook-r.com/Graphs/Facets_(ggplot2)/)
+```{r}
+data <- data_correct
+
+# 8 figures arranged in 4 rows and 2 columns
+#png("myplot.png")
+#par(mfrow=c(4,2))
+  
+for (ii in unique(data$Subject)){
+ temp_data <- data[data$Subject==ii,]
+
+#Histogram of the Ds
+hist <- ggplot(temp_data, aes(x=temp_data$context_target_diff)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(temp_data$D)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="context_target_diff", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+plot(hist)
+
+}
+
+#################################################################################
+data <- low_high
+
+hist <- ggplot(data, aes(x = context_target_diff)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(data$context_target_diff)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="context_target_diff", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black")
+  #axis.text.x = element_text(color="black", 
+   #                          size=20, angle=0),
+  #axis.text.y = element_text(color="black", 
+   #                          size=20, angle=0),
+  #axis.text=element_text(size=22),
+  #axis.title=element_text(size=22)
+)
+
+hist + facet_grid(.~TrialType)
+```
+
+Generate new distributions to validate the design for the online exp
+```{r}
+cond_f <- NULL
+cond_f <- subset(low_high, TrialType == "High")
+describe(cond_f$context_value)
+
+cond_f <- subset(low_high, Rank > 21)
+cond_f <- subset(cond_f, Rank < 40 )
+describe(cond_f$OldValue)
+#Current design:
+#Out of 60 products, we took 40 as target products and 20 as context (10 for high and 10 for low). We discovered, that we have a problem with the distribution of the context_target_diff over the values of the targets. Only very low or high targets have large context_target_diffs.
+
+#20 target products, and 20 context products:
+len_trials <- 80
+len_features <- 2
+
+#Generate a sample of 20 ranks (25:45) from a uniform distribution
+v1 <- NULL
+v1 <- sample(16:45, len_trials, replace=TRUE)
+dim(v1) <- c(len_trials,1)
+
+#Generate a sample of 10 high contexts (51:60)
+h1 <- sample(51:60, len_trials/2, replace=TRUE)
+dim(h1) <- c(len_trials/2,1)
+
+#Generate a sample of 10 low contexts (1:10)
+l1 <- sample(1:10, len_trials/2, replace=TRUE)
+dim(l1) <- c(len_trials/2,1)
+
+#data_set <- matrix( , nrow = len_trials, ncol = len_features)
+data_set <- c(h1,l1)
+data_set <- cbind(v1, data_set)
+
+data_set <- as.data.frame(data_set)
+colnames(data_set) <- c("OldValue", "context_mean")
+
+data_set$context_target_diff <- data_set$context_mean - data_set$OldValue
+
+plot(data_set$OldValue, data_set$context_target_diff)
+
+##############################################################################################
+#30 target products (16:45), and 20 context products+10 medium produvts as context:
+len_trials <- 120
+len_features <- 2
+
+#Generate a sample of 20 ranks (25:45) from a uniform distribution
+v1 <- NULL
+v1 <- sample(16:45, len_trials, replace=TRUE)
+dim(v1) <- c(len_trials, 1)
+
+#Generate a sample of 10 high contexts (51:60)
+len_h <- 40
+h1 <- sample(51:60, len_h, replace=TRUE)
+dim(h1) <- c(len_h,1)
+
+#Generate a sample of 10 low contexts (1:10)
+l1 <- sample(1:10, len_h , replace=TRUE)
+dim(l1) <- c(len_h ,1)
+
+#Generate a sample of 10 medium contexts (16:45)
+m1 <- sample(16:45, 10, replace=TRUE)
+dim(m1) <- c(10,1)
+m1 <- rep(m1, 4)
+
+#data_set <- matrix( , nrow = len_trials, ncol = len_features)
+data_set <- c(h1,l1,m1)
+data_set <- cbind(v1, data_set)
+
+data_set <- as.data.frame(data_set)
+colnames(data_set) <- c("OldValue", "context_mean")
+
+data_set$context_target_diff <- data_set$context_mean - data_set$OldValue
+
+plot(data_set$OldValue, data_set$context_target_diff)
+
+##############################################################################################
+##Simulation according to value:
+#30 target products (16:45), and 20 context products+10 medium produvts as context:
+len_trials <- 120
+len_features <- 2
+
+#Generate a sample of 20 ranks (25:45) from a uniform distribution
+v1 <- NULL
+v1 <- sample(8:20, len_trials, replace=TRUE)
+dim(v1) <- c(len_trials, 1)
+
+#Generate a sample of 10 high contexts (51:60)
+len_h <- 40
+h1 <- sample(25:30, len_h, replace=TRUE)
+dim(h1) <- c(len_h,1)
+
+#Generate a sample of 10 low contexts (1:10)
+l1 <- sample(0:7, len_h , replace=TRUE)
+dim(l1) <- c(len_h ,1)
+
+#Generate a sample of 10 medium contexts (16:45)
+m1 <- sample(5:25, 10, replace=TRUE)
+dim(m1) <- c(10,1)
+m1 <- rep(m1, 4)
+
+#Generate random SlideValues (H0)
+a1 <- sample(0:30, len_trials, replace=TRUE)
+dim(a1) <- c(len_trials, 1)
+
+#data_set <- matrix( , nrow = len_trials, ncol = len_features)
+data_set <- c(h1,l1,m1)
+data_set <- cbind(v1, data_set, a1)
+
+data_set <- as.data.frame(data_set)
+colnames(data_set) <- c("OldValue", "context_mean", "SlideValue")
+
+data_set$context_target_diff <- data_set$context_mean - data_set$OldValue
+
+plot(data_set$OldValue, data_set$context_target_diff)
+
+data_set$new_old_diff <- data_set$SlideValue - data_set$OldValue
+
+plot(data_set$context_mean, data_set$new_old_diff)
+abline(h=0, col="blue")
+```
+
+Simulation on many subjects - new design
+```{r}
+##Simulation according to value:
+#Current values (8 subjects)
+cond_f <- NULL
+cond_f <- low_high
+hist(cond_f$new_old_diff)
+describe(cond_f$new_old_diff)
+sd(cond_f$new_old_diff)
+
+cond_f <- subset(low_high, TrialType == "Low")
+describe(cond_f$context_value)
+
+cond_f <- subset(low_high, Rank > 16)
+cond_f <- subset(cond_f, Rank < 45 ) 
+describe(cond_f$OldValue)
+
+##Simulation
+iterantionN = 1000 #number of iterations
+#minN = 20
+#maxN = 100
+stoppingRole = 5
+
+ #create a new data frame with one coloumn and number of rows according to the number of iterations
+  powerVec = setNames(data.frame(matrix(ncol = 1, nrow = iterantionN),row.names=1:iterantionN),'power')
+  
+stopCounter = 0
+#for (sampleN in 60:100){
+for (iteration in 1:iterantionN){
+  #iteration <- 1
+#30 target products (16:45), and 20 context products+10 medium produvts as context:
+num_subjects <- 80
+data_set <- NULL
+
+for (ii in 1:num_subjects){
+
+len_trials <- 120
+len_features <- 2
+
+#Generate a sample of 20 ranks (25:45) from a uniform distribution
+v1 <- NULL
+v1 <- sample(5:25, len_trials, replace=TRUE)
+dim(v1) <- c(len_trials, 1)
+
+#Generate a sample of 10 high contexts (51:60)
+len_h <- 40
+h1 <- sample(25:30, len_h, replace=TRUE)
+dim(h1) <- c(len_h,1)
+h1_name <- rep(2, len_h)
+dim(h1_name) <- c(len_h,1)
+
+#Generate a sample of 10 low contexts (1:10)
+l1 <- sample(0:5, len_h , replace=TRUE)
+dim(l1) <- c(len_h ,1)
+l1_name <- rep(1, len_h)
+dim(l1_name) <- c(len_h,1)
+
+#Generate a sample of 10 medium contexts (16:45)
+m1 <- sample(5:25, 10, replace=TRUE)
+dim(m1) <- c(10,1)
+m1 <- rep(m1, 4)
+m1_name <- rep(0, len_h)
+dim(m1_name) <- c(len_h,1)
+
+#Generate random SlideValues (H0)
+a1 <- v1 + rnorm(len_trials, 0, 5.78)
+a1[a1>30] <- 30
+a1[a1<0] <- 0
+#a1 <- sample(0:30, len_trials, replace=TRUE)
+dim(a1) <- c(len_trials, 1)
+
+#Generate subject num
+Subject <- rep(ii, len_trials)
+dim(Subject) <- c(len_trials,1)
+
+##Create data set for one subject
+#data_set <- matrix( , nrow = len_trials, ncol = len_features)
+data_set_temp1 <- c(m1,l1,h1)
+data_set_temp2 <- c(m1_name, l1_name, h1_name)
+data_set_perSub <- cbind(Subject, v1, data_set_temp2, data_set_temp1, a1)
+
+##Concatanate it to all the other subjects
+data_set <- rbind(data_set, data_set_perSub)
+
+data_set_perSub <- NULL
+
+}
+
+data_set <- as.data.frame(data_set)
+colnames(data_set) <- c("Subject", "OldValue","TrialType" ,"context_mean", "SlideValue")
+data_set$TrialType <- as.factor(data_set$TrialType)
+#data_set$OldValue <- as.numeric(data_set$OldValue)
+#data_set$SlideValue <- as.numeric(data_set$SlideValue)
+#data_set$context_mean <- as.numeric(data_set$context_mean)
+
+
+data_set$context_target_diff <- data_set$context_mean - data_set$OldValue
+
+#plot(data_set$OldValue, data_set$context_target_diff)
+
+data_set$new_old_diff <- data_set$SlideValue - data_set$OldValue
+
+#plot(data_set$context_mean, data_set$new_old_diff)
+#abline(h=0, col="blue")
+
+#plot(data_set$OldValue, data_set$SlideValue)
+
+##GLM
+
+mymodel = lmer(SlideValue ~ OldValue * context_target_diff + (1 | Subject),
+                data = data_set,
+               REML=FALSE
+                )
+summary(mymodel)
+
+#p-value of context_target_diff
+#coef(summary(mymodel))[, 5][2]
+
+powerVec$power[iteration] = coef(summary(mymodel))[, 5][4]
+    print(coef(summary(mymodel))[, 5][4])
+    print(iteration)
+}
+
+hist(powerVec)
+
+```
+
+Simulation on many subjects - old design
+```{r}
+##Simulation according to value:
+#Current values (8 subjects)
+cond_f <- NULL
+cond_f <- low_high
+describe(cond_f$OldValue)
+#hist(cond_f$new_old_diff)
+#describe(cond_f$new_old_diff)
+#sd(cond_f$new_old_diff)
+
+cond_f <- subset(low_high, TrialType == "Low")
+describe(cond_f$context_value)
+
+##Simulation
+
+iterantionN = 1000  #number of iterations
+#minN = 20
+#maxN = 100
+stoppingRole = 5
+
+ #create a new data frame with one coloumn and number of rows according to the number of iterations
+  powerVec = setNames(data.frame(matrix(ncol = 1, nrow = iterantionN),row.names=1:iterantionN),'power')
+  
+stopCounter = 0
+#for (sampleN in 60:100){
+for (iteration in 1:iterantionN){
+  #iteration <- 1
+#30 target products (16:45), and 20 context products+10 medium produvts as context:
+num_subjects <- 80
+data_set <- NULL
+
+for (ii in 1:num_subjects){
+
+len_trials <- 160 #80*2
+len_features <- 2
+
+#Generate a sample of 30 values
+v1 <- NULL
+v1 <- sample(5:28, len_trials, replace=TRUE) #3:30 (old)
+dim(v1) <- c(len_trials, 1)
+
+#Generate a sample of 10 high contexts (51:60)
+len_h <- 80
+h1 <- sample(25:30, len_h, replace=TRUE)
+dim(h1) <- c(len_h,1)
+h1_name <- rep(1, len_h)
+dim(h1_name) <- c(len_h,1)
+
+#Generate a sample of 10 low contexts (1:10)
+l1 <- sample(0:7, len_h , replace=TRUE)
+dim(l1) <- c(len_h ,1)
+l1_name <- rep(0, len_h)
+dim(l1_name) <- c(len_h,1)
+
+#Generate a sample of 10 medium contexts (16:45)
+#m1 <- sample(3:30, 10, replace=TRUE)
+#dim(m1) <- c(10,1)
+#m1 <- rep(m1, 4)
+#m1_name <- rep("Medium", len_h)
+#dim(m1_name) <- c(len_h,1)
+
+#Generate random SlideValues - oldValue+noise
+a1 <- v1 + rnorm(len_trials, 0, 5.78)
+a1[a1>30] <- 30 #if more than 30, stay 30
+a1[a1<0] <- 0 #if less than 0, stay 0
+#a1 <- sample(0:30, len_trials, replace=TRUE)
+dim(a1) <- c(len_trials, 1)
+
+#Generate subject num
+Subject <- rep(ii, len_trials)
+dim(Subject) <- c(len_trials,1)
+
+##Create data set for one subject
+#data_set <- matrix( , nrow = len_trials, ncol = len_features)
+data_set_temp1 <- c(l1,h1) #context_mean
+data_set_temp2 <- c(l1_name, h1_name) #TrialType
+data_set_perSub <- cbind(Subject, v1, data_set_temp2, data_set_temp1, a1)
+
+##Concatanate it to all the other subjects
+data_set <- rbind(data_set, data_set_perSub)
+
+data_set_perSub <- NULL
+
+}
+
+data_set <- as.data.frame(data_set)
+colnames(data_set) <- c("Subject", "OldValue","TrialType" ,"context_mean", "SlideValue")
+data_set$TrialType <- as.factor(data_set$TrialType)
+#data_set$OldValue <- as.numeric(data_set$OldValue)
+#data_set$SlideValue <- as.numeric(data_set$SlideValue)
+#data_set$context_mean <- as.numeric(data_set$context_mean)
+
+
+data_set$context_target_diff <- data_set$context_mean - data_set$OldValue
+
+#plot(data_set$OldValue, data_set$context_target_diff)
+
+data_set$new_old_diff <- data_set$SlideValue - data_set$OldValue
+
+#plot(data_set$context_mean, data_set$new_old_diff)
+#abline(h=0, col="blue")
+
+#plot(data_set$OldValue, data_set$SlideValue)
+
+##GLM
+
+mymodel = lmer(SlideValue ~ context_target_diff * OldValue + (1 | Subject),
+                data = data_set,
+               REML=FALSE
+                )
+summary(mymodel)
+
+#p-value of context_target_diff
+#coef(summary(mymodel))[, 5][2]
+
+powerVec$power[iteration] = coef(summary(mymodel))[, 5][4]
+    print(coef(summary(mymodel))[, 5][4])
+    print(iteration)
+}
+
+hist(powerVec)
+
+```
