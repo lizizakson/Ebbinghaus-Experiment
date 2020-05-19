@@ -1,0 +1,261 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+rm(list = ls())  
+#work computer
+#mywd="C:/Users/User/Dropbox/SharedEbbin/Task/Results/pilot_v3"
+#home computer
+mywd="C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v6"
+setwd(mywd)
+
+#Install libraries
+#install and read package for reading ecxel files
+##install.packages("readxl")
+##install.packages("dplyr")
+##install.packages("caTools")
+##install.packages("ggplot2")
+##install.packages("GGally")
+##install.packages("reshape2")
+##install.packages("lme4")
+##install.packages("compiler")
+##install.packages("parallel")
+##install.packages("boot")
+##install.packages("lattice")
+##install.packages("sjPlot")
+##install.packages("sjlabelled")
+##install.packages("sjmisc")
+##install.packages("ggplot2")
+##install.packages("languageR")
+##install.packages("plotrix")
+##install.packages("psych")
+
+#Load libraries
+library("readxl")
+library(caTools)
+library(dplyr)
+require(ggplot2)
+require(GGally)
+require(reshape2)
+require(lme4)
+require(compiler)
+require(parallel)
+require(boot)
+require(lattice)
+#library(sjPlot)
+#library(sjlabelled)
+#library(sjmisc)
+#library(ggplot2)
+#library(languageR)
+library(psych)
+
+#files <- list.files(path = mywd)
+
+
+#mydata <- read.csv("ValuePerception-8915-bdm.csv")
+
+```
+ 
+Concatenate several data frames
+```{r}
+
+setwd("C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v6")
+ldf <- list() # creates a list
+listcsv <- dir(pattern = "bdm.*csv") # creates the list of all the bdm-csv files in the directory
+for (k in 1:length(listcsv)){
+ ldf[[k]] <- read.csv(listcsv[k])
+}
+#str(ldf[[1]]) 
+
+mydata <- do.call("rbind", ldf)
+
+#mydata  <- data[data$Subject %in% c(113,114,115,116,117,118),]
+#mydata <- data[(data$Subject > 112),] #pilot V1
+#mydata <- data[(data$Subject > 200),] #pilot V3
+#mydata <- data[(data$Subject > 300),] #pilot V4
+#mydata <- data[(data$Subject > 400),] #pilot V5
+mydata <- mydata[complete.cases(mydata), ]
+mydata <- mydata[,-(4)]
+
+#Problematic subjects (problem with BDM)
+#pp <- c(114,118,119,124) #pilot v1
+#pp <- c(127,132,137,149,156,157) #pilot v2
+#pp <- c(203,204) #pilot v3
+#pp <- c(203,204, 225, 228) #pilot 3 all
+pp <- c(601,604,605) #pilot 6
+#Remove problematic subjects
+mydata <- mydata[!(mydata$Subject %in% pp),]
+
+length(unique(mydata$Subject))
+
+
+table_freq <- mydata %>%
+   group_by(Subject) %>% 
+   summarise_each(funs(Freq=n()))
+
+```
+
+Values given in BDM - group level
+```{r}
+#for (ii in 1:max(mydata_noF$SID)){
+ # temp_data <- mydata_noF[mydata_noF$SID==ii,]
+
+library(plotrix)
+  
+#Group by item name
+table_item <- mydata %>%
+    group_by(Category, ItemName) %>% 
+    summarise_each(funs(mean,sd,std.error))
+
+# sort by value
+newdata <- table_item[order(table_item$SlideValue_mean),] 
+
+#table <- cbind(newdata$Category,newdata$ItemName,newdata$SlideValue_mean,newdata$SlideValue_std.error)
+#table <- as.data.frame(table)
+
+#plot values given in BDM
+#plot(newdata$SlideValue_mean)
+
+x= seq(1,length(newdata$ItemName))
+
+bdm_plot <- ggplot(newdata, aes(x=x, y=SlideValue_mean, color=Category)) + geom_point(size = 2)+
+geom_pointrange(aes(ymin=SlideValue_mean-SlideValue_std.error, ymax=SlideValue_mean+SlideValue_std.error)) +
+labs(x="Product", y = "Mean Bid Amount [NIS]")
+
+b <- bdm_plot + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                            size=20, angle=0),
+  axis.title=element_text(color="black", 
+                             size=20, angle=0)
+)
+
+print(b)
+
+```
+
+Correlation between the two values given in BDM - group level
+```{r}
+library(plotrix)
+  
+#Group by block and item name
+table_block <- mydata %>%
+    group_by(Block, ItemName) %>% 
+    summarise_each(funs(mean))
+
+#divide into 2 blocks
+block1 <- table_block[ which(table_block$Block == 1) , ]
+block2 <-table_block[ which(table_block$Block == 2) , ]
+
+block1_new <- block1[order(block1$ItemName),] 
+block2_new <- block2[order(block2$ItemName),]
+
+plot(block1_new$SlideValue, block2_new$SlideValue)
+cor.test(block1_new$SlideValue, block2_new$SlideValue)
+
+```
+
+Values given in BDM - each subject
+```{r}
+
+library(plotrix)
+#ii = 126
+for (ii in unique(mydata$Subject)){
+ temp_data <- mydata[mydata$Subject==ii,]
+
+#Group by item name
+table_item <- temp_data %>%
+    group_by(Category, ItemName) %>% 
+    summarise_all(funs(mean,sd,std.error))
+    #summarise(SlideValue = mean(SlideValue), SlideValue_sd = sd(SlideValue))
+
+# sort by value
+newdata <- table_item[order(table_item$SlideValue_mean),]
+newdata_under2 <- newdata[(newdata$SlideValue_mean<=2),]
+
+
+#plot values given in BDM
+#plot(newdata$SlideValue_mean)
+
+x= seq(1,length(newdata$ItemName))
+
+
+bdm_plot <- ggplot(newdata, aes(x=x, y=SlideValue_mean, color=Category)) + geom_point(size = 2)+
+geom_pointrange(aes(ymin=SlideValue_mean-SlideValue_std.error, ymax=SlideValue_mean+SlideValue_std.error)) + ylim(0,30) +
+labs(x="Product", y = "Mean Bid Amount [NIS]")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(color="black", 
+                            size=20, angle=0),
+  axis.title=element_text(color="black", 
+                             size=20, angle=0)
+)
+  
+print(bdm_plot + geom_vline(xintercept = 10,  
+                color = "black", size=1.5) +  geom_vline(xintercept = 50,  
+                color = "black", size=1.5))
+
+#print(bdm_plot)
+print(nrow(newdata_under2))
+if(nrow(newdata_under2)>20){print(ii)}
+}
+#unique(mydata$Subject)
+```
+
+Correlation between the two values given in BDM - each subject
+```{r}
+#ii = 113
+for (ii in unique(mydata$Subject)){
+ temp_data <- mydata[mydata$Subject==ii,]
+
+#divide into 2 blocks
+block1 <- temp_data[ which(temp_data$Block == 2) , ]
+block2 <- temp_data[ which(temp_data$Block == 3) , ]
+
+block1_new <- block1[order(block1$ItemName),] 
+block2_new <- block2[order(block2$ItemName),]
+
+plot(block1_new$SlideValue, block2_new$SlideValue)
+corr <- cor.test(block1_new$SlideValue, block2_new$SlideValue, use="pairwise.complete.obs")
+print(corr[["estimate"]])
+
+          }
+```
+
+RT
+
+```{r}
+describe(mydata$SlideRT)
+boxplot(mydata$SlideRT)
+```
+
