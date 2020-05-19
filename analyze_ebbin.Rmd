@@ -1,0 +1,761 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+rm(list = ls())  
+#work computer
+#mywd="C:/Users/User/Dropbox/SharedEbbin/Task/Results/pilot_v6"
+#home computer
+mywd="C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v6"
+#setwd(mywd)
+
+#Install libraries
+#install and read package for reading ecxel files
+##install.packages("readxl")
+##install.packages("dplyr")
+##install.packages("caTools")
+##install.packages("ggplot2")
+##install.packages("GGally")
+##install.packages("reshape2")
+##install.packages("lme4")
+##install.packages("compiler")
+##install.packages("parallel")
+##install.packages("boot")
+##install.packages("lattice")
+##install.packages("sjPlot")
+##install.packages("sjlabelled")
+##install.packages("sjmisc")
+##install.packages("ggplot2")
+##install.packages("languageR")
+##install.packages("plotrix")
+##install.packages("psych")
+
+#Load libraries
+library("readxl")
+library(caTools)
+library(dplyr)
+require(ggplot2)
+require(GGally)
+require(reshape2)
+require(lme4)
+require(compiler)
+require(parallel)
+require(boot)
+require(lattice)
+library(psych)
+#library(sjPlot)
+#library(sjlabelled)
+#library(sjmisc)
+#library(ggplot2)
+#library(languageR)
+
+#mydata <- read.csv("ValuePerception-8914-ebbin.csv")
+
+```
+
+Concatenate several data frames
+```{r}
+
+setwd("C:/Users/Liz/Dropbox/SharedEbbin/Task/Results/pilot_v6")
+ldf <- list() # creates a list
+listcsv <- dir(pattern = "ebbin.*csv") # creates the list of all the bdm-csv files in the directory
+for (k in 1:length(listcsv)){
+ ldf[[k]] <- read.csv(listcsv[k])
+}
+#str(ldf[[1]]) 
+
+mydata <- do.call("rbind", ldf)
+
+#mydata  <- data[!(data$Subject %in% c(0,32,6969,8915)),]
+#mydata <- mydata[complete.cases(mydata), ]
+#mydata <- mydata[(mydata$Subject > 112),] #pilot v1
+#mydata <- mydata[(mydata$Subject > 125),] #pilot V2
+#mydata <- mydata[(mydata$Subject > 200),] #pilot V3
+#mydata <- mydata[(mydata$Subject > 300),] #pilot V4
+
+mydata <- mydata[(mydata$Choice == 1 | mydata$Choice == 2),] #exclude missed trials
+
+#Problematic subjects (problem with BDM)
+#pp <- c(114,118,119) #pilot v1
+#pp <- c(132,137,149,152,156,157) #pilot 2
+#pp <- c(203,204) #pilot v3
+#pp <- c(203,204, 225, 228) #pilot 3 all
+pp <- c(601,604,605) #pilot 6
+
+#Remove problematic subjects
+mydata <- mydata[!(mydata$Subject %in% pp),]
+
+```
+
+Pre-processing 
+```{r}
+#Munge the data
+mydata$D <- as.numeric(mydata$D)
+#Add a column of abs D_Ranks
+mydata$abs_D <- abs(mydata$D)
+
+#divide into 2 data sets
+base_cond <- mydata[ which(mydata$LeftContext == "None") , ]
+base_cond <- base_cond[,-c(15,16)] #exclude missing columns of context
+
+ebbin_cond <- mydata[ which(mydata$LeftContext == "Small" | mydata$LeftContext == "Large") , ]
+Hard <- ebbin_cond [ which(ebbin_cond$Difficulty == "Hard" ) , ]
+Easy <- ebbin_cond [ which(ebbin_cond$Difficulty == "Easy" ) , ]
+```
+
+Histograms
+```{r}
+#par(mfrow = c(3, 3))  # Set up a 2 x 2 plotting space
+
+#ii = 00085
+for (ii in unique(mydata$Subject)){
+ temp_data <- mydata[mydata$Subject==ii,]
+
+#Histogram of the Ds
+hist <- ggplot(temp_data, aes(x=temp_data$D)) + 
+ geom_histogram(aes(y=..density..), binwidth=1, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(temp_data$D)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="Radius difference", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+print(hist)
+}
+```
+
+Accuracy analysis
+```{r}
+library(plotrix)
+
+#Group by subject
+table_basic <- base_cond %>%
+    group_by(Subject) %>% 
+    #summarise_all(funs(mean,std.error))
+    summarise(Correct = mean(Correct))
+
+table_ebbin <- ebbin_cond %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+table_hard <- Hard %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+table_easy <- Easy %>%
+    group_by(Subject) %>% 
+    summarise(Correct = mean(Correct))
+
+all_table <- cbind(table_basic$Subject, table_basic$Correct, table_ebbin$Correct, table_hard$Correct, table_easy$Correct)
+
+colnames(all_table) <- c("Subject", "Basic_mean", "Ebbin_mean", "Hard_mean", "Easy_mean")
+all_table <- as.data.frame(all_table)
+
+describe(all_table
+         )
+
+#save as an excel file
+write.csv(all_table, "perception_acc_pilotV6_all.csv")
+
+#Bar plot
+mean_base <- mean(all_table$Basic_mean)
+mean_ebbin <- mean(all_table$Ebbin_mean)
+
+means = c(mean_base, mean_ebbin) 
+
+cols <- c("gray", "darkred")
+barplot(means,
+space=2,
+col = cols)
+
+
+```
+
+Base condition
+```{r}
+abs_D = abs(base_cond$D)
+
+
+mymodel = glmer(Correct ~ abs_D + (1 | Subject),
+                data = base_cond,
+                family = binomial)
+summary(mymodel)
+
+########################################################################################################
+#Propensity to choose the bigger circle as a function of the radius difference (left-right) in abs value
+
+fit1 = glm(Correct ~ abs_D, data=base_cond, family=binomial)
+newdat <- data.frame(abs_D=seq(min(abs_D), max(abs_D),len=100))
+newdat$Correct = predict(fit1, newdata=newdat, type="response")
+plot(Correct~abs_D, data=base_cond, col="red4")
+lines(Correct~abs_D, newdat, col="green4", lwd=2)
+
+#########################################################################################################
+#ii = 106
+threshold_base_table <- NULL
+j <- 1
+cond <- ebbin_cond
+
+for (ii in unique(mydata$Subject)){
+ temp_data <- cond[cond$Subject==ii,]
+
+#Propensity to choose "left" as a function of the radius differencr (left-right)
+
+choice_left <- ifelse(temp_data$Choice == 1, 1, 0)
+temp_data <- cbind(temp_data, choice_left)
+
+fit = glm(choice_left ~ D, data=temp_data, family=binomial)
+newdat <- data.frame(D=seq(min(temp_data$D), max(temp_data$D),len=100))
+newdat$choice_left = predict(fit, newdata=newdat, type="response")
+plot(choice_left~D, data=temp_data, col="red4")
+lines(choice_left~D, newdat, col="green4", lwd=2)
+
+#threshold calculation
+intercept_base =  fit$coefficients[1]
+slope_base = fit$coefficients[2]
+
+threshold_base <- (-intercept_base)/slope_base
+print(slope_base)
+
+threshold_base_table[j] <- threshold_base
+j <- j+1
+}
+
+threshold_base_table <- as.data.frame(threshold_base_table)
+
+#RT
+abs_D = abs(base_cond$D)
+
+RT_model = lm(ChoiceRT ~ abs(D),
+                     data=base_cond)
+summary(RT_model)
+plot(abs_D , base_cond$ChoiceRT)
+
+```
+
+Ebbinghaus condition
+```{r}
+abs_D = abs(ebbin_cond$D)
+
+
+mymodel = glm(Correct ~ abs_D,
+                data = ebbin_cond,
+                family = binomial)
+summary(mymodel)
+
+#Discrimination accuracy
+fit2 = glm(Correct ~ abs_D, data=ebbin_cond, family=binomial)
+newdat <- data.frame(abs_D=seq(min(abs_D), max(abs_D),len=100))
+newdat$Correct = predict(fit2, newdata=newdat, type="response")
+plot(Correct~abs_D, data=ebbin_cond, col="red4")
+lines(Correct~abs_D, newdat, col="green4", lwd=2)
+
+##########################################################################################################
+
+#Propensity to choose "left" as a function of the radius difference (left-right)
+choice_left <- ifelse(ebbin_cond$Choice == 1, 1, 0)
+ebbin_cond <- cbind(ebbin_cond, choice_left)
+
+fit = glm(choice_left ~ D, data=ebbin_cond, family=binomial)
+newdat <- data.frame(D=seq(min(ebbin_cond$D), max(ebbin_cond$D),len=100))
+newdat$choice_left = predict(fit, newdata=newdat, type="response")
+plot(choice_left~D, data=ebbin_cond, col="red4")
+lines(choice_left~D, newdat, col="green4", lwd=2)
+
+##########################################################################################################
+
+##Frequency of choosing the bigger target with small circles (big T on small con vs. big T on large con)
+
+small_loc <- ifelse(ebbin_cond$LeftContext == "Small", 1, 2) #small-circles location
+ebbin_cond <- cbind(ebbin_cond, small_loc)
+
+#Does the big circle was on the left or right?
+big_loc <- ifelse(ebbin_cond$D > 0 , 1, 2)
+ebbin_cond <- cbind(ebbin_cond, big_loc)
+
+#Does the big circle and the small context was on the left?
+bigT_smallCon_left <- ifelse(ebbin_cond$big_loc == 1 & ebbin_cond$small_loc == 1, 1, 0)
+ebbin_cond <- cbind(ebbin_cond, bigT_smallCon_left)
+
+
+#Does the big target circle was where the small-context was?
+bigT_smallCon <- ifelse(ebbin_cond$big_loc == ebbin_cond$small_loc, 1, 0)
+ebbin_cond <- cbind(ebbin_cond, bigT_smallCon)
+
+BS_cond <- ebbin_cond[ which(ebbin_cond$bigT_smallCon == 1) , ]
+BL_cond <- ebbin_cond[ which(ebbin_cond$bigT_smallCon == 0) , ] #harder
+
+BS_cond2 <- ebbin_cond[ which(ebbin_cond$Difficulty == "Easy") , ]
+BL_cond2 <- ebbin_cond[ which(ebbin_cond$Difficulty == "Hard") , ] #harder
+
+
+mean_BL <- mean(BL_cond$Correct)
+mean_BS <- mean(BS_cond$Correct)
+
+abs_D = abs(BL_cond$D)
+
+#Discrimination accuracy
+fit2 = glm(Correct ~ abs_D, data=BL_cond, family=binomial)
+newdat <- data.frame(abs_D=seq(min(abs_D), max(abs_D),len=100))
+newdat$Correct = predict(fit2, newdata=newdat, type="response")
+plot(Correct~abs_D, data=BL_cond, col="red4")
+lines(Correct~abs_D, newdat, col="green4", lwd=2)
+
+##########################################################################################################
+
+#Propensity to choose the target which is surrounded by small-circles as a function of the radius difference (small-context target - large-context target)
+
+small_loc <- ifelse(ebbin_cond$LeftContext == "Small", 1, 2) #small-circles location
+ebbin_cond <- cbind(ebbin_cond, small_loc)
+
+choice_small_con <- ifelse(ebbin_cond$Choice == ebbin_cond$small_loc, 1, 0) #y
+ebbin_cond <- cbind(ebbin_cond, choice_small_con)
+
+D_small_large <- NULL #x
+
+for (i in 1:length(choice_small_con)){
+  if(ebbin_cond$small_loc[i] == 1)#the small circles were on the left side 
+  {D_small_large[i] <- ebbin_cond$D[i]} 
+  else{D_small_large[i] <- -ebbin_cond$D[i]}
+}
+
+ebbin_cond <- cbind(ebbin_cond, D_small_large)
+
+fit2 = glm(choice_small_con ~ D_small_large, data=ebbin_cond, family=binomial)
+newdat <- data.frame(D_small_large=seq(min(ebbin_cond$D_small_large), max(ebbin_cond$D_small_large),len=100))
+newdat$choice_small_con = predict(fit2, newdata=newdat, type="response")
+plot(choice_small_con~D_small_large, data=ebbin_cond, col="red4")
+lines(choice_small_con~D_small_large, newdat, col="green4", lwd=2)
+
+#########################################################################################################
+#ii = 106
+threshold_ebbin_table <- NULL
+j <- 1
+
+for (ii in unique(mydata$Subject)){
+ temp_data <- ebbin_cond[ebbin_cond$Subject==ii,]
+
+##Propensity to choose "left" (transposition: left represents the target which is surrounded by small-circles) as a function of the radius difference (small-context target - large-context target = left-right)
+
+small_loc <- ifelse(temp_data$LeftContext == "Small", 1, 2) #small-circles location
+temp_data <- cbind(temp_data, small_loc)
+
+#Transposition: change the rows which are "Large" in LeftContext by: changing the D sign and changing the direction of choice
+
+trans_D <- NULL
+trans_choice <- NULL
+
+for (ii in 1:length(small_loc)){
+  if(temp_data$small_loc[ii] == 2){
+    trans_D[ii]<- -temp_data$D[ii]
+    trans_choice[ii] <- ifelse(temp_data$Choice[ii]==1,2,1)
+  }
+  else{
+    trans_D[ii] <- temp_data$D[ii]
+    trans_choice[ii] <- temp_data$Choice[ii]
+  }
+}
+
+trans_choice <- ifelse(trans_choice==2,0,1)
+
+temp_data <- cbind(temp_data, trans_D, trans_choice)
+
+fit3 = glm(trans_choice ~ trans_D, data=temp_data, family=binomial)
+newdat <- data.frame(trans_D=seq(min(temp_data$trans_D), max(temp_data$trans_D),len=100))
+newdat$trans_choice = predict(fit3, newdata=newdat, type="response")
+plot(trans_choice ~ trans_D, data=temp_data, col="red4")
+lines(trans_choice ~ trans_D, newdat, col="green4", lwd=2)
+
+#threshold calculation
+intercept_ebbin =  fit3$coefficients[1]
+slope_ebbin = fit3$coefficients[2]
+
+threshold_ebbin <- (-intercept_ebbin)/slope_ebbin
+print(slope_ebbin)
+
+threshold_ebbin_table[j] <- threshold_ebbin
+j <- j+1
+}
+
+threshold_table <- cbind(threshold_base_table, threshold_ebbin_table)
+
+#summary(threshold_table$threshold_ebbin_table)
+#describe(threshold_table$threshold_ebbin_table)
+
+write.csv(threshold_table, "perception_threshold_pilotV6_all.csv")
+
+#################################################################################################################
+##Validity of parameters
+BS_cond2 <- ebbin_cond[ which(ebbin_cond$Difficulty == "Easy") , ]
+BL_cond2 <- ebbin_cond[ which(ebbin_cond$Difficulty == "Hard") , ] #harder
+
+BL_cond2_left <- BL_cond2[ which(BL_cond2$LeftContext == "Small") , ]
+BL_cond2_right <- BL_cond2[ which(BL_cond2$LeftContext == "Large") , ]
+
+
+#################################################################################################################
+#RT
+abs_D = abs(base_cond$D)
+
+RT_model = lmer(ChoiceRT ~ abs_D + (1 | Subject),
+                     data=mydata)
+summary(RT_model)
+plot(abs_D , base_cond$ChoiceRT)
+
+```
+
+
+GLM which includes all subjects - basic vs. ebbin (transposed)
+```{r}
+#GLM model which includes all subjects
+library(multcomp)
+library(languageR)
+library(RColorBrewer)
+
+#list of all conditions
+df_list <- list(base_cond,ebbin_cond)
+
+
+#vector of colors (a color for each condition)
+color_vec <- brewer.pal(n = length(df_list), name = "Set1")
+
+
+#ii = 1
+#loop over data sets of conditions
+for (ii in 1:length(df_list)){
+  
+if(ii == 1){
+choice_left <- ifelse(df_list[[ii]][["Choice"]] == 1, 1, 0)
+cond_f <- cbind(df_list[[ii]], choice_left)
+
+model = glmer(choice_left ~ D + (1 | Subject),
+                data = cond_f,
+                family = binomial(link="logit"))
+          
+summary(model)
+}
+
+if(ii==2){
+  #Transposition: change the rows which are "High" in LeftContext by: changing the D_Ranks sign and changing the direction of choice
+
+trans_D <- NULL
+trans_choice <- NULL
+cond <- df_list[[ii]]
+D <- cond$D
+Choice <- cond$Choice
+
+low_loc <- ifelse(cond$LeftContext == "Small", 1, 0) #small-circles location
+cond  <- cbind(cond , low_loc)
+
+for (bb in 1:length(cond$low_loc)){
+  if(cond$low_loc[bb] == 0){
+    trans_D[bb]<- -D[bb]
+    trans_choice[bb] <- ifelse(Choice[bb]==1,2,1)
+  }
+  else{
+    trans_D[bb] <- D[bb]
+    trans_choice[bb] <- Choice[bb]
+  }
+}
+
+trans_choice <- ifelse(trans_choice==2,0,1)
+
+cond <- cbind(cond, trans_D, trans_choice)
+
+model = glmer(trans_choice ~ trans_D + (1 + trans_D | Subject),
+                data = cond,
+                family = binomial(link="logit"))
+          
+summary(model)
+
+summary(rePCA(model))
+}
+
+
+#Added in order to save in a higher resolution
+#tiff("test.tiff", units="in",width=8, height=5, res=300)
+
+plotLMER.fnc(model,ylimit=0:1,lockYlim=TRUE,xlim =  range(-20:20),
+             linecolor=color_vec[ii],addToExistingPlot = TRUE,
+lwd=4,xlabel="Difference (left radius - right radius)",
+ylabel="Probability of choosing left")
+
+cond_f <- NULL
+par(new=TRUE)
+}
+
+#legend("bottomright", c("base_cond","Hh_cond","Hl_cond","hh_cond","ll_cond"), pch=15, 
+legend("bottomright", c("Basic","Ebbinghaus"), pch=15, #legend for 2 conditions
+col=brewer.pal(n = length(df_list), name = "Set1"),title="Condition")
+
+#Add line in prob = 0.5
+abline(h=0.5, col="black",lty=2, size = 2) 
+
+#par(new=FALSE)
+#display.brewer.pal(n = 5, name = 'Set1')
+# insert ggplot code
+#dev.off() 
+
+#tmp <- as.data.frame(confint(glht(model))$confint)
+#tmp$Comparison <- rownames(tmp)
+#ggplot(tmp, aes(x = Comparison, y = Estimate, ymin = lwr, ymax = upr)) +
+ # geom_errorbar() + geom_point()
+
+unique(mydata$Subject)
+```
+
+
+GLM which includes all subjects - basic vs. ebbin (not transposed)
+```{r}
+#GLM model which includes all subjects
+library(multcomp)
+library(languageR)
+library(RColorBrewer)
+
+#list of all conditions
+df_list <- list(base_cond,ebbin_cond)
+
+
+#vector of colors (a color for each condition)
+color_vec <- brewer.pal(n = length(df_list), name = "Set1")
+
+
+#ii = 1
+#loop over data sets of conditions
+for (ii in 1:length(df_list)){
+  
+
+choice_left <- ifelse(df_list[[ii]][["Choice"]] == 1, 1, 0)
+cond_f <- cbind(df_list[[ii]], choice_left)
+
+model = glmer(choice_left ~ D + (1 + D | Subject),
+                data = cond_f,
+                family = binomial(link="logit"))
+          
+summary(model)
+
+coefs <- coef(model)
+coef_percept <- coefs[["Subject"]][["D"]]
+
+
+#Added in order to save in a higher resolution
+#tiff("test.tiff", units="in",width=8, height=5, res=300)
+
+plotLMER.fnc(model,ylimit=0:1,lockYlim=TRUE,xlim =  range(-20:20),
+             linecolor=color_vec[ii],addToExistingPlot = TRUE,
+lwd=4,xlabel="Difference (left radius - right radius)",
+ylabel="Probability of choosing left")
+
+cond_f <- NULL
+par(new=TRUE)
+}
+
+#legend("bottomright", c("base_cond","Hh_cond","Hl_cond","hh_cond","ll_cond"), pch=15, 
+legend("bottomright", c("Basic","Ebbinghaus"), pch=15, #legend for 2 conditions
+col=brewer.pal(n = length(df_list), name = "Set1"),title="Condition")
+
+#Add line in prob = 0.5
+abline(h=0.5, col="black",lty=2, size = 2) 
+
+#par(new=FALSE)
+#display.brewer.pal(n = 5, name = 'Set1')
+# insert ggplot code
+#dev.off() 
+
+#tmp <- as.data.frame(confint(glht(model))$confint)
+#tmp$Comparison <- rownames(tmp)
+#ggplot(tmp, aes(x = Comparison, y = Estimate, ymin = lwr, ymax = upr)) +
+ # geom_errorbar() + geom_point()
+
+unique(mydata$Subject)
+```
+
+
+
+GLM per subject - basic vs. ebbin (transposed)
+```{r}
+
+cond$Subject <- as.factor(cond$Subject)
+g <- ggplot(cond, aes(x=trans_D, y=trans_choice, col=Subject)) +
+     geom_smooth(method="glm",method.args = list(family = "binomial"), se=FALSE, show.legend = FALSE, lwd = 1.5)+
+  labs(x="Difference (left radius - right radius)", y = "Probability of choosing left")+
+  geom_hline(yintercept=0.5, linetype="dashed", 
+                color = "black", size=1)
+  
+
+g + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "black"),
+  axis.text.x = element_text(color="black", 
+                             size=22, angle=0),
+  axis.text.y = element_text(color="black", 
+                            size=22, angle=0),
+  axis.text=element_text(color="black", 
+                            size=20, angle=0),
+  axis.title=element_text(color="black", 
+                             size=20, angle=0)
+)
+
+
+
+
+```
+
+Plot coefs for each subject
+Taken from: https://drsimonj.svbtle.com/plotting-individual-observations-and-group-means-with-ggplot2
+---------------------
+```{r}
+#GLM
+choice_left <- ifelse(base_cond$Choice == 1, 1, 0)
+base_cond <- cbind(base_cond, choice_left)
+
+
+mymodel = glmer(choice_left ~ D + (1 | Subject),
+                data = base_cond,
+                family = binomial)
+summary(mymodel)
+
+mymodel = glmer(Correct ~ abs_D + Difficulty + (1 | Subject),
+                data = mydata,
+                family = binomial)
+summary(mymodel)
+
+
+#Plot individuals + means
+base_cond$Subject <- as.factor(base_cond$Subject)
+
+
+p_sub <- ggplot(data = base_cond, aes(x = D, y = choice_left, color = Subject)) +
+  geom_smooth(method='glm', family = binomial, se=FALSE , show.legend = FALSE, lwd=2) +
+  scale_x_continuous(limits=c(min(base_cond$D),max(base_cond$D))) +
+  #scale_y_continuous(limits=c(0, 1.0))+
+  labs(x="D_ranks", y = "Correct")
+
+p_sub + theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=18, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=18, angle=0),
+  axis.text=element_text(color="black", 
+                             size=20, angle=0),
+  axis.title=element_text(color="black", 
+                             size=20, angle=0))
+
+
+```
+
+Histograms of thresholds
+```{r}
+
+#Histogram of ebbin thresholds
+ggplot(threshold_table, aes(x=threshold_table$threshold_ebbin_table)) + 
+ geom_histogram(aes(y=..density..), binwidth=0.5, colour="black", fill="#DCDCDC")+
+ geom_density(alpha=.2, fill="#FF6666")+
+  geom_vline(aes(xintercept=mean(threshold_table$threshold_ebbin_table)), color="#368FBF",
+             linetype="dashed", size = 2)+
+  labs(x="Ebbinghaus thresholds", y = "Density")+
+theme(
+  # Remove panel border
+  panel.border = element_blank(),  
+  # Remove panel grid lines
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  # Remove panel background
+  panel.background = element_blank(),
+  # Add axis line
+  axis.line = element_line(color = "grey"),
+  axis.text.x = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text.y = element_text(color="black", 
+                             size=20, angle=0),
+  axis.text=element_text(size=22),
+  axis.title=element_text(size=22)
+)
+
+```
+
+RTs
+```{r}
+library(plotrix)
+
+#Group by subject
+table_basic <- base_cond %>%
+    group_by(Subject) %>% 
+    #summarise_all(funs(mean,std.error))
+    summarise(RT = mean(ChoiceRT))
+
+table_ebbin <- ebbin_cond %>%
+    group_by(Subject) %>% 
+    summarise(RT = mean(ChoiceRT))
+
+all_table <- cbind(table_basic$Subject, table_basic$RT, table_ebbin$RT)
+
+colnames(all_table) <- c("Subject", "Basic_mean", "Ebbin_mean")
+all_table <- as.data.frame(all_table)
+
+#save as an excel file
+write.csv(all_table, "ebbin_RT_pilot3_all.csv")
+
+#Bar plot
+mean_base <- mean(all_table$Basic_mean)
+mean_ebbin <- mean(all_table$Ebbin_mean)
+
+means = c(mean_base, mean_ebbin) 
+
+cols <- c("gray", "darkred")
+barplot(means,
+space=2,
+col = cols)
+
+#plot RT
+cond_f <- ebbin_cond
+abs_D = abs(cond_f$D)
+
+RT_model = lmer(ChoiceRT ~ abs_D + (1 | Subject),
+                     data=cond_f )
+summary(RT_model)
+
+plot(cond_f$D , cond_f$ChoiceRT)
+
+
+```
+
+
